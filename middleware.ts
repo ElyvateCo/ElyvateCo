@@ -26,14 +26,28 @@ export async function middleware(req: NextRequest) {
     return new NextResponse('Forbidden', { status: 403 })
   }
 
-  const { pathname } = req.nextUrl
-  let res = NextResponse.next()
+  const { pathname, searchParams } = req.nextUrl
+
+  // TEMPORARY preview helper: until a real domain is connected, Vercel's
+  // shared *.vercel.app address can't do real subdomains at all — DNS for
+  // "ely.yoursite.vercel.app" simply doesn't exist. Visiting
+  // "yoursite.vercel.app/?store=ely" previews that store's public pages
+  // instead. Only honored on the shared/platform host — a merchant's own
+  // connected domain always shows their real store, ignoring this.
+  const previewStore = searchParams.get('store')
+  const requestHeaders = new Headers(req.headers)
+  if (previewStore && isPlatformHost(req)) {
+    requestHeaders.set('x-preview-store', previewStore.toLowerCase())
+  }
+
+  let res = NextResponse.next({ request: { headers: requestHeaders } })
 
   // Home page of the platform itself → landing page (URL stays "/")
-  if (pathname === '/' && isPlatformHost(req)) {
+  // — unless a preview store was requested, then let it show that store.
+  if (pathname === '/' && isPlatformHost(req) && !previewStore) {
     const url = req.nextUrl.clone()
     url.pathname = '/welcome'
-    res = NextResponse.rewrite(url)
+    res = NextResponse.rewrite(url, { request: { headers: requestHeaders } })
   }
 
   // ── Admin panel page gate ───────────────────────────────────────────────

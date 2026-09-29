@@ -23,13 +23,14 @@ const STEP_TITLES = ['About your store', 'Look & feel', 'Find you online']
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'elyvate.com'
 
 // Public address of the new store, for the "View my store" button
-function buildStoreUrl(subdomain: string): string | null {
-  const { protocol, hostname, port } = window.location
+function buildStoreUrl(subdomain: string): string {
+  const { protocol, hostname, port, origin } = window.location
   if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
     return `${protocol}//${subdomain}.localhost${port ? `:${port}` : ''}`
   }
   if (process.env.NEXT_PUBLIC_ROOT_DOMAIN) return `https://${subdomain}.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`
-  return null
+  // No real domain connected yet — preview via query param instead
+  return `${origin}/?store=${subdomain}`
 }
 
 export default function OnboardingWizard({ initial }: { initial: OnboardingInitial }) {
@@ -109,7 +110,7 @@ export default function OnboardingWizard({ initial }: { initial: OnboardingIniti
 
   // ── Done screen ─────────────────────────────────────────────────────────
   if (step === 3) {
-    const storeUrl = subdomain ? buildStoreUrl(subdomain) : null
+    const storeUrl = subdomain ? buildStoreUrl(subdomain) : null // always a string once subdomain exists
     return (
       <Shell>
         <div className="text-center py-4">

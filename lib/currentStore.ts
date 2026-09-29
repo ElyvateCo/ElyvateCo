@@ -31,9 +31,19 @@ function getHost(): string {
 // body. Cached per request so a page with many components only hits the
 // database once.
 export const getCurrentStore = cache(async (): Promise<CurrentStore | null> => {
-  const host = getHost()
   const db = supabaseAdmin()
   const cols = 'id, store_name, subdomain, custom_domain, plan'
+
+  // TEMPORARY preview helper — see middleware.ts. Lets you test any store
+  // via ?store=xyz on the shared vercel.app URL, before a real domain
+  // with wildcard subdomains is connected.
+  const previewSubdomain = headers().get('x-preview-store')
+  if (previewSubdomain) {
+    const { data } = await db.from('stores').select(cols).eq('subdomain', previewSubdomain).maybeSingle()
+    if (data) return data as CurrentStore
+  }
+
+  const host = getHost()
 
   let subdomain: string | null = null
   let customDomain: string | null = null
