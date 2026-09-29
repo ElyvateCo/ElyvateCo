@@ -4,11 +4,22 @@ import {
   Store, LayoutDashboard, Wallet, Globe, Smartphone, Palette,
   ArrowRight, Check,
 } from 'lucide-react'
+import { supabaseServer } from '@/lib/supabase-server'
+import { getOwnedStore } from '@/lib/ownedStore'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Elyvate — Launch your online store in minutes',
   description:
     'Elyvate helps sellers in Bangladesh build a real online store — manage products and orders, and get paid with local payment methods.',
+}
+
+// Preview-mode storefront link (see middleware.ts) — becomes a real
+// subdomain automatically once NEXT_PUBLIC_ROOT_DOMAIN is set.
+function storeLink(subdomain: string): string {
+  const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN
+  return root ? `https://${subdomain}.${root}` : `/?store=${subdomain}`
 }
 
 const FEATURES = [
@@ -65,7 +76,15 @@ const PREMIUM_PLAN = [
   'Higher limits than Free',
 ]
 
-export default function PlatformLandingPage() {
+export default async function PlatformLandingPage() {
+  const { data: { user } } = await supabaseServer().auth.getUser()
+  const store = user ? await getOwnedStore() : null
+
+  // Signed-in merchant: swap every "log in / sign up" prompt for direct
+  // links into their own store, instead of asking them to sign up again.
+  const primaryHref  = store ? '/admin' : '/signup'
+  const primaryLabel = store ? 'Go to admin panel' : 'Start your free store'
+
   return (
     <div className="min-h-screen bg-surface-0 text-ink-primary">
       {/* ── Top bar ─────────────────────────────────────────────── */}
@@ -80,10 +99,23 @@ export default function PlatformLandingPage() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <Link href="/login" className="text-sm font-medium px-3 py-2 text-ink-secondary hover:text-ink-primary">
-              Log in
-            </Link>
-            <Link href="/signup" className="btn-primary !px-4 !py-2">Start free</Link>
+            {store ? (
+              <>
+                <Link href={storeLink(store.subdomain)} className="text-sm font-medium px-3 py-2 text-ink-secondary hover:text-ink-primary">
+                  My store
+                </Link>
+                <Link href="/admin" className="btn-primary !px-4 !py-2">Admin panel</Link>
+              </>
+            ) : user ? (
+              <Link href="/onboarding" className="btn-primary !px-4 !py-2">Finish setup</Link>
+            ) : (
+              <>
+                <Link href="/login" className="text-sm font-medium px-3 py-2 text-ink-secondary hover:text-ink-primary">
+                  Log in
+                </Link>
+                <Link href="/signup" className="btn-primary !px-4 !py-2">Start free</Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -102,8 +134,8 @@ export default function PlatformLandingPage() {
             manage everything from one simple dashboard — no coding, no headaches.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/signup" className="btn-primary inline-flex items-center justify-center gap-2 !px-8 !py-4">
-              Start your free store <ArrowRight size={16} />
+            <Link href={primaryHref} className="btn-primary inline-flex items-center justify-center gap-2 !px-8 !py-4">
+              {primaryLabel} <ArrowRight size={16} />
             </Link>
             <a href="#how" className="btn-outline inline-flex items-center justify-center !px-8 !py-4">
               See how it works
@@ -208,10 +240,14 @@ export default function PlatformLandingPage() {
       {/* ── Final call to action ────────────────────────────────── */}
       <section className="section-pad py-16 md:py-24">
         <div className="container-xl max-w-2xl text-center">
-          <h2 className="font-display text-3xl md:text-4xl font-semibold">Ready to open your store?</h2>
-          <p className="mt-3 text-ink-secondary">It takes about two minutes to get started.</p>
-          <Link href="/signup" className="btn-primary inline-flex items-center gap-2 mt-8 !px-8 !py-4">
-            Start your free store <ArrowRight size={16} />
+          <h2 className="font-display text-3xl md:text-4xl font-semibold">
+            {store ? 'Ready to add more products?' : 'Ready to open your store?'}
+          </h2>
+          <p className="mt-3 text-ink-secondary">
+            {store ? 'Jump back into your dashboard.' : 'It takes about two minutes to get started.'}
+          </p>
+          <Link href={primaryHref} className="btn-primary inline-flex items-center gap-2 mt-8 !px-8 !py-4">
+            {primaryLabel} <ArrowRight size={16} />
           </Link>
         </div>
       </section>
@@ -221,8 +257,14 @@ export default function PlatformLandingPage() {
         <div className="container-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-ink-muted">
           <span>© {new Date().getFullYear()} Elyvate. All rights reserved.</span>
           <div className="flex gap-5">
-            <Link href="/login" className="hover:text-ink-primary">Log in</Link>
-            <Link href="/signup" className="hover:text-ink-primary">Sign up</Link>
+            {store ? (
+              <Link href="/admin" className="hover:text-ink-primary">Admin panel</Link>
+            ) : (
+              <>
+                <Link href="/login" className="hover:text-ink-primary">Log in</Link>
+                <Link href="/signup" className="hover:text-ink-primary">Sign up</Link>
+              </>
+            )}
           </div>
         </div>
       </footer>

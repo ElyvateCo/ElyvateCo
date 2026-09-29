@@ -7,7 +7,7 @@ import { requireCurrentStore } from '@/lib/currentStore'
 import { StoreProvider } from '@/lib/storeContext'
 
 // Same revalidation window as the rest of the storefront pages.
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 async function getAnnouncement(storeId: string) {
   const { data } = await supabase

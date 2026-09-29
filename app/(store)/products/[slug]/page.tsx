@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { getCurrentStore } from '@/lib/currentStore'
 import ProductPageClient from './ProductPageClient'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 async function getProduct(slug: string) {
   // Slugs are only unique WITHIN a store, so always match on both

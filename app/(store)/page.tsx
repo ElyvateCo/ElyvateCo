@@ -7,7 +7,7 @@ import FeaturesBar from '@/components/store/FeaturesBar'
 import ProductGrid from '@/components/store/ProductGrid'
 import CategoryShowcase from '@/components/store/CategoryShowcase'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 async function getHero(storeId: string) {
   const { data } = await supabase.from('hero_section').select('*').eq('store_id', storeId).maybeSingle()

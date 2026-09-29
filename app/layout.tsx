@@ -39,7 +39,7 @@ export const viewport: Viewport = {
 // Without this, Next.js can cache the custom-font/theme lookup indefinitely
 // since this layout wraps every route in the app — meaning a change in the
 // admin panel might never show up on the live site without a full redeploy.
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 // Figures out the right @font-face `format()` hint from the file extension.
 // Browsers don't strictly require this to be correct to load the font, but

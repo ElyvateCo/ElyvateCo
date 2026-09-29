@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { requireCurrentStore } from '@/lib/currentStore'
 import ProductGrid from '@/components/store/ProductGrid'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'All Products — Elyvate',
