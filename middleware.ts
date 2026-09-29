@@ -1,0 +1,100 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { supabaseMiddleware } from '@/lib/supabase-server'
+
+// The bare platform address (root domain, localhost, Vercel preview URLs)
+// shows the Elyvate landing page. Store subdomains and custom domains
+// (myshop.elyvate.com, myshop.localhost, shop.theirdomain.com) show stores.
+function isPlatformHost(req: NextRequest): boolean {
+  const host = (req.headers.get('x-forwarded-host') || req.headers.get('host') || '').split(':')[0].toLowerCase()
+  const root = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || '').toLowerCase()
+  return (
+    !host ||
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host.endsWith('.vercel.app') ||
+    (root !== '' && (host === root || host === `www.${root}`))
+  )
+}
+
+export async function middleware(req: NextRequest) {
+
+  // ── FIX: CVE-2025-29927 ─────────────────────────────────────────────────
+  // Attackers can bypass all middleware auth by adding this header to any
+  // request, tricking Next.js into thinking middleware already ran.
+  // We hard-block any request that contains this header from external sources.
+  if (req.headers.get('x-middleware-subrequest')) {
+    return new NextResponse('Forbidden', { status: 403 })
+  }
+
+  const { pathname } = req.nextUrl
+  let res = NextResponse.next()
+
+  // Home page of the platform itself → landing page (URL stays "/")
+  if (pathname === '/' && isPlatformHost(req)) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/welcome'
+    res = NextResponse.rewrite(url)
+  }
+
+  // ── Admin panel page gate ───────────────────────────────────────────────
+  // Every /admin/* PAGE needs a real, logged-in merchant session — checked
+  // via Supabase Auth (cookie-based). This replaced the old single shared
+  // ADMIN_SECRET password. This is the actual thing standing between a
+  // random visitor and the admin panel — without it, a page that fetches
+  // its own data directly (like the dashboard) would render for anyone who
+  // just knows the URL, regardless of what any individual API route checks.
+  if (pathname.startsWith('/admin') || pathname === '/onboarding') {
+    const sb = supabaseMiddleware(req, res)
+    const { data: { user } } = await sb.auth.getUser()
+    if (!user) {
+      const loginUrl = new URL('/login', req.url)
+      loginUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+  }
+
+  // ── Security Headers ────────────────────────────────────────────────────
+  // These headers protect against a wide range of common web attacks.
+
+  // Prevent clickjacking — nobody can embed your site in an iframe
+  res.headers.set('X-Frame-Options', 'DENY')
+
+  // Force HTTPS — browsers must only connect over HTTPS after first visit
+  res.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+
+  // Prevent MIME type sniffing — browser must respect Content-Type
+  res.headers.set('X-Content-Type-Options', 'nosniff')
+
+  // Stop browsers sending Referer header to external sites
+  res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+
+  // Disable dangerous browser features
+  res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()')
+
+  // Content Security Policy — controls where resources can load from
+  // Protects against XSS, data injection, and malicious script injection
+  res.headers.set('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com https://*.supabase.co https://*.supabase.in",
+    "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://api.qrserver.com",
+    // Hero/product videos can be any admin-pasted HTTPS URL (a CDN, etc.),
+    // so media-src must allow https: broadly rather than just Supabase —
+    // otherwise pasted video links get silently blocked by the browser.
+    "media-src 'self' blob: https:",
+    "connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co wss://*.supabase.in https://api.resend.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; '))
+
+  return res
+}
+
+export const config = {
+  matcher: [
+    // Apply to all routes except static files and Next.js internals
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+}
