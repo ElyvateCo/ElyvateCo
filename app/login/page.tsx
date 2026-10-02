@@ -57,6 +57,9 @@ function LoginForm() {
             <input required type="password" className="input pl-11" placeholder="••••••••"
               value={password} onChange={e => setPassword(e.target.value)} />
           </div>
+          <div className="text-right mt-1.5">
+            <a href="/forgot-password" className="text-xs text-brand-600 font-medium">Forgot password?</a>
+          </div>
         </div>
         <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
           {loading && <Loader2 size={16} className="animate-spin" />}

@@ -40,7 +40,10 @@ export const getCurrentStore = cache(async (): Promise<CurrentStore | null> => {
   const previewSubdomain = headers().get('x-preview-store')
   if (previewSubdomain) {
     const { data } = await db.from('stores').select(cols).eq('subdomain', previewSubdomain).maybeSingle()
-    if (data) return data as CurrentStore
+    // A name that isn't a real store means "no such store" — NEVER quietly
+    // fall back to the default store (that hid typos like "ely" vs "elyy"
+    // and made it look like products were missing).
+    return (data as CurrentStore | null) ?? null
   }
 
   const host = getHost()
