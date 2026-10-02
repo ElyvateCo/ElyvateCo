@@ -18,7 +18,9 @@ export function supabaseMerchantBrowser() {
     _client = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookieOptions: { domain: cookieDomainFor(window.location.host), path: '/', sameSite: 'lax', secure: window.location.protocol === 'https:' } }
+      typeof window === 'undefined'
+        ? undefined
+        : { cookieOptions: { domain: cookieDomainFor(window.location.host), path: '/', sameSite: 'lax', secure: window.location.protocol === 'https:' } }
     )
   }
   return _client

@@ -19,7 +19,8 @@ export function parseHttpsUrl(v: unknown): string | null {
   }
 }
 
-export function isHttpsUrl(v: unknown): boolean {
+// Type guard: after `isHttpsUrl(x)` is true, TypeScript knows x is a string
+export function isHttpsUrl(v: unknown): v is string {
   return parseHttpsUrl(v) !== null
 }
 
