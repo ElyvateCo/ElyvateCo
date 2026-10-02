@@ -60,7 +60,7 @@ export async function middleware(req: NextRequest) {
   }
 
   if (paramStore) {
-    res.cookies.set(PREVIEW_COOKIE, paramStore, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 60 * 60 * 24 })
+    res.cookies.set(PREVIEW_COOKIE, paramStore, { path: '/', sameSite: 'lax', maxAge: 60 * 60 * 24 })
   } else if (clearPreview) {
     res.cookies.set(PREVIEW_COOKIE, '', { path: '/', maxAge: 0 })
   }

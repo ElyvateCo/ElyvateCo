@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
-import AdminSidebar from '@/components/admin/AdminSidebar'
-import AdminLightModeGuard from '@/components/admin/AdminLightModeGuard'
+import AdminShell from '@/components/admin/AdminShell'
 import { supabaseServer } from '@/lib/supabase-server'
 import { getOwnedStore } from '@/lib/ownedStore'
 import { getPublicStoreUrl } from '@/lib/storeUrl'
@@ -16,15 +15,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const store = await getOwnedStore()
   if (!store) redirect('/')
 
+  const storeUrl = getPublicStoreUrl(store.subdomain)
+  // Real address when it exists (shop.elyvateco.com); on the Vercel preview
+  // URL there is no separate address yet, so just show the store's short name.
+  const storeLabel = storeUrl.startsWith('http') ? storeUrl.replace(/^https?:\/\//, '') : `Store address: ${store.subdomain}`
+
   return (
-    <div className="min-h-screen bg-surface-50 flex">
-      <AdminLightModeGuard />
-      <AdminSidebar storeName={store.store_name} storeUrl={getPublicStoreUrl(store.subdomain)} />
-      <main className="flex-1 overflow-auto">
-        <div className="p-6 lg:p-10 max-w-7xl">
-          {children}
-        </div>
-      </main>
-    </div>
+    <AdminShell storeName={store.store_name} subdomain={store.subdomain} storeUrl={storeUrl} storeLabel={storeLabel}>
+      {children}
+    </AdminShell>
   )
 }
