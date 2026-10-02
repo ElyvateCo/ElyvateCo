@@ -34,11 +34,20 @@ export async function middleware(req: NextRequest) {
   // "yoursite.vercel.app/?store=ely" previews that store's public pages
   // instead. Only honored on the shared/platform host — a merchant's own
   // connected domain always shows their real store, ignoring this.
-  const previewStore = searchParams.get('store')
+  //
+  // The ?store= value is remembered in a cookie, so clicking around inside
+  // the previewed store (/products, /cart, /checkout...) keeps showing that
+  // store instead of dropping back to the default one. Use ?store=off to
+  // clear it and see the platform landing page again.
+  const PREVIEW_COOKIE = 'elyvate_preview_store'
+  const onPlatformHost = isPlatformHost(req)
+  const rawParam = (searchParams.get('store') || '').trim().toLowerCase()
+  const clearPreview = onPlatformHost && rawParam === 'off'
+  const paramStore = onPlatformHost && /^[a-z0-9-]{1,30}$/.test(rawParam) && rawParam !== 'off' ? rawParam : null
+  const cookieStore = onPlatformHost && !clearPreview ? (req.cookies.get(PREVIEW_COOKIE)?.value || '') : ''
+  const previewStore = paramStore || (/^[a-z0-9-]{1,30}$/.test(cookieStore) ? cookieStore : null)
   const requestHeaders = new Headers(req.headers)
-  if (previewStore && isPlatformHost(req)) {
-    requestHeaders.set('x-preview-store', previewStore.toLowerCase())
-  }
+  if (previewStore) requestHeaders.set('x-preview-store', previewStore)
 
   let res = NextResponse.next({ request: { headers: requestHeaders } })
 
@@ -48,6 +57,12 @@ export async function middleware(req: NextRequest) {
     const url = req.nextUrl.clone()
     url.pathname = '/welcome'
     res = NextResponse.rewrite(url, { request: { headers: requestHeaders } })
+  }
+
+  if (paramStore) {
+    res.cookies.set(PREVIEW_COOKIE, paramStore, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 60 * 60 * 24 })
+  } else if (clearPreview) {
+    res.cookies.set(PREVIEW_COOKIE, '', { path: '/', maxAge: 0 })
   }
 
   // ── Admin panel page gate ───────────────────────────────────────────────
@@ -91,8 +106,10 @@ export async function middleware(req: NextRequest) {
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com https://*.supabase.co https://*.supabase.in",
-    "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://api.qrserver.com",
+    // Merchants paste font links from any host, so https: is allowed
+    "font-src 'self' data: https:",
+    // Merchants paste photo links from any host (imgbb, Imgur, Cloudinary...)
+    "img-src 'self' data: blob: https:",
     // Hero/product videos can be any admin-pasted HTTPS URL (a CDN, etc.),
     // so media-src must allow https: broadly rather than just Supabase —
     // otherwise pasted video links get silently blocked by the browser.

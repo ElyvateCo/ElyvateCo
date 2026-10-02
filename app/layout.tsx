@@ -4,6 +4,7 @@ import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/lib/authContext'
 import { supabase } from '@/lib/supabase'
+import { parseCssSafeUrl } from '@/lib/mediaLinks'
 import { getCurrentStore } from '@/lib/currentStore'
 import { THEME_PRESETS, DEFAULT_THEME_PRESET, isThemePresetKey, isValidHex, generateColorScale } from '@/lib/themePresets'
 import { DARK_MODE_INIT_SCRIPT } from '@/lib/useDarkMode'
@@ -67,7 +68,8 @@ async function getSiteAppearance() {
         .maybeSingle()
     : { data: null }
   return {
-    customFontUrl:  data?.custom_font_url ?? null,
+    // The link is written into a <style> tag — only ever a clean https link
+    customFontUrl:  parseCssSafeUrl(data?.custom_font_url),
     themePreset:    data?.theme_preset ?? DEFAULT_THEME_PRESET,
     customThemeHex: data?.custom_theme_hex ?? null,
   }

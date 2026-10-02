@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
+import { parseHttpsUrl, parseUrlList } from '@/lib/mediaLinks'
+
+// Photos/videos are LINKS pasted by the merchant — keep only valid https links.
+function cleanMedia(body: Record<string, unknown>) {
+  if ('images' in body) body.images = parseUrlList(body.images)
+  if ('product_videos' in body) body.product_videos = parseUrlList(body.product_videos)
+  if ('promo_video_url' in body) body.promo_video_url = parseHttpsUrl(body.promo_video_url)
+  return body
+}
 
 // GET — list this store's own products (used by the admin products page)
 export async function GET(req: NextRequest) {
@@ -16,7 +25,8 @@ export async function POST(req: NextRequest) {
   const store = await getOwnedStore()
   if (!store) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json()
+  const body = cleanMedia(await req.json())
+  delete body.id
   const db = supabaseAdmin()
   const { data, error } = await db.from('products').insert({ ...body, store_id: store.id }).select().single()
 
@@ -28,7 +38,8 @@ export async function PUT(req: NextRequest) {
   const store = await getOwnedStore()
   if (!store) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { id, ...rest } = await req.json()
+  const { id, ...rawRest } = await req.json()
+  const rest = cleanMedia(rawRest)
   if (!id) return NextResponse.json({ error: 'Missing product id' }, { status: 400 })
 
   // Never let store_id be overwritten via the update payload

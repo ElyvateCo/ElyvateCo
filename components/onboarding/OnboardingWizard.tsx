@@ -20,7 +20,7 @@ export type OnboardingInitial = {
 }
 
 const STEP_TITLES = ['About your store', 'Look & feel', 'Find you online']
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'elyvate.com'
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'elyvateco.com'
 
 // Public address of the new store, for the "View my store" button
 function buildStoreUrl(subdomain: string): string {
@@ -100,12 +100,20 @@ export default function OnboardingWizard({ initial }: { initial: OnboardingIniti
     }
   }
 
+  // Admin lives on the store's own subdomain, so leave the root domain.
+  // (Preview mode without a real domain just stays on the same host.)
+  function goAdmin(path: string) {
+    const base = subdomain ? buildStoreUrl(subdomain) : null
+    if (base && !base.includes('/?store=')) { window.location.assign(`${base}${path}`); return }
+    router.push(path); router.refresh()
+  }
+
   async function skip() {
     setBusy(true)
     // Skipping still marks setup as finished so they aren't asked again
     const ok = await save({ completed: true })
     setBusy(false)
-    if (ok) { router.push('/admin'); router.refresh() }
+    if (ok) goAdmin('/admin')
   }
 
   // ── Done screen ─────────────────────────────────────────────────────────
@@ -122,10 +130,10 @@ export default function OnboardingWizard({ initial }: { initial: OnboardingIniti
             Next step: add your first product so customers have something to buy.
           </p>
           <div className="space-y-3">
-            <button className="btn-primary w-full" onClick={() => { router.push('/admin/products'); router.refresh() }}>
+            <button className="btn-primary w-full" onClick={() => goAdmin('/admin/products')}>
               Add my first product
             </button>
-            <button className="btn-outline w-full" onClick={() => { router.push('/admin'); router.refresh() }}>
+            <button className="btn-outline w-full" onClick={() => goAdmin('/admin')}>
               Go to dashboard
             </button>
             {storeUrl && (

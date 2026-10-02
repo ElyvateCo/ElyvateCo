@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
+import { checkLink } from '@/lib/mediaLinks'
 
 function unauthorized() {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -42,6 +43,9 @@ export async function POST(req: NextRequest) {
     const name = typeof body.name === 'string' ? body.name.trim().slice(0, 60) : ''
     if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
 
+    const img = checkLink(body.image_url, 'Image link')
+    if (!img.ok) return NextResponse.json({ error: img.error }, { status: 400 })
+
     const slug = slugify(name)
     if (!slug) return NextResponse.json({ error: 'Name must contain at least one letter or number' }, { status: 400 })
 
@@ -58,7 +62,7 @@ export async function POST(req: NextRequest) {
         store_id: store.id,
         name,
         slug,
-        image_url: typeof body.image_url === 'string' ? body.image_url : '',
+        image_url: img.value ?? '',
         display_order: nextOrder,
       })
       .select()

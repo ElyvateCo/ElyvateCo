@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import type { Product, Category } from '@/lib/supabase'
-import { uploadLargeFile } from '@/lib/uploadLargeFile'
-import { Plus, Pencil, Trash2, X, Upload, Star, GripVertical, CheckCircle2 } from 'lucide-react'
+import { isHttpsUrl, parseUrlList } from '@/lib/mediaLinks'
+import { Plus, Pencil, Trash2, X, Link2, Star, GripVertical, CheckCircle2 } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 
@@ -18,13 +18,9 @@ export default function AdminProducts() {
   const [categories, setCategories] = useState<Category[]>([])
   const [modal, setModal]         = useState(false)
   const [editing, setEditing]     = useState<Partial<Product>>(EMPTY)
-  const [uploading, setUploading] = useState(false)
-  const [videoUploading, setVideoUploading] = useState(false)
-  const [promoUploading, setPromoUploading] = useState(false)
+  const [imageLinks, setImageLinks] = useState('')
+  const [videoLinks, setVideoLinks] = useState('')
   const [newBullet, setNewBullet] = useState('')
-  const fileRef    = useRef<HTMLInputElement>(null)
-  const videoRef   = useRef<HTMLInputElement>(null)
-  const promoRef   = useRef<HTMLInputElement>(null)
   const bulletRef  = useRef<HTMLInputElement>(null)
 
   const load = async () => {
@@ -75,48 +71,19 @@ export default function AdminProducts() {
     })
   }
 
-  // ── Image upload ──────────────────────────────────────────────
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    if (!files.length) return
-    setUploading(true)
-    const formData = new FormData()
-    files.forEach(f => formData.append('files', f))
-    formData.append('folder', 'products')
-    try {
-      const res  = await fetch('/api/admin/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
-      setEditing(prev => ({ ...prev, images: [...(prev.images ?? []), ...data.urls] }))
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed')
-    } finally { setUploading(false) }
+  // ── Photos & videos are added by LINK (no file uploads) ───────
+  function addImageLinks() {
+    const urls = parseUrlList(imageLinks)
+    if (!urls.length) { toast.error('Paste a full photo link starting with https://'); return }
+    setEditing(prev => ({ ...prev, images: [...(prev.images ?? []), ...urls.filter(u => !(prev.images ?? []).includes(u))] }))
+    setImageLinks('')
   }
 
-  // ── Video upload — signed-URL direct upload (bypasses Vercel's 4.5MB API
-  // limit, while still requiring admin auth to obtain the upload token — see
-  // lib/uploadLargeFile.ts and /api/admin/upload-url)
-  async function handleVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    if (!files.length) return
-
-    const file = files[0]
-    const sizeMb = file.size / (1024 * 1024)
-    if (sizeMb > 100) {
-      toast.error(`Video is ${sizeMb.toFixed(0)}MB — max allowed is 100MB.`)
-      return
-    }
-
-    setVideoUploading(true)
-    try {
-      const url = await uploadLargeFile(file, { bucket: 'product-videos', folder: 'products' })
-      setEditing(prev => ({ ...prev, product_videos: [...(prev.product_videos ?? []), url] }))
-      toast.success('Video uploaded!')
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Video upload failed')
-    } finally {
-      setVideoUploading(false)
-    }
+  function addVideoLinks() {
+    const urls = parseUrlList(videoLinks)
+    if (!urls.length) { toast.error('Paste a full video link starting with https://'); return }
+    setEditing(prev => ({ ...prev, product_videos: [...(prev.product_videos ?? []), ...urls.filter(u => !(prev.product_videos ?? []).includes(u))] }))
+    setVideoLinks('')
   }
 
   function removeImage(idx: number) {
@@ -127,26 +94,13 @@ export default function AdminProducts() {
     setEditing(e => ({ ...e, product_videos: (e.product_videos ?? []).filter((_, i) => i !== idx) }))
   }
 
-  // ── Promo video — scroll-triggered floating popup (9:16) ─────
-  async function handlePromoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const sizeMb = file.size / (1024 * 1024)
-    if (sizeMb > 100) { toast.error(`Video is ${sizeMb.toFixed(0)}MB — max 100MB.`); return }
-    setPromoUploading(true)
-    try {
-      const url = await uploadLargeFile(file, { bucket: 'product-videos', folder: 'promo' })
-      setEditing(prev => ({ ...prev, promo_video_url: url }))
-      toast.success('Promo video uploaded!')
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed')
-    } finally { setPromoUploading(false) }
-  }
-
   // ── Save ──────────────────────────────────────────────────────
   async function handleSave() {
     if (!editing.name || !editing.slug || !editing.price) {
       toast.error('Name, slug and price are required'); return
+    }
+    if (editing.promo_video_url && !isHttpsUrl(editing.promo_video_url)) {
+      toast.error('Promo video link must be a full link starting with https://'); return
     }
     try {
       const isEdit = !!editing.id
@@ -278,22 +232,23 @@ export default function AdminProducts() {
                       </button>
                     </div>
                   ))}
-                  <button
-                    onClick={() => fileRef.current?.click()}
-                    disabled={uploading}
-                    className="w-20 h-20 rounded-2xl border-2 border-dashed border-surface-300 flex flex-col items-center justify-center hover:border-brand-500 transition-colors text-ink-muted hover:text-brand-600"
-                  >
-                    {uploading ? <span className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" /> : <Upload size={18} />}
-                    <span className="text-xs mt-1">Upload</span>
-                  </button>
                 </div>
-                <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
+                <textarea
+                  className="input text-sm" rows={2}
+                  placeholder="Paste photo link(s) — https://..."
+                  value={imageLinks}
+                  onChange={e => setImageLinks(e.target.value)}
+                />
+                <button type="button" onClick={addImageLinks} className="btn-outline w-full mt-2 flex items-center justify-center gap-2">
+                  <Link2 size={16} /> Add photo link
+                </button>
+                <p className="text-xs text-ink-muted mt-1.5">Use a direct link that opens as just the photo. Paste several at once, one per line. The first photo is the main one.</p>
               </div>
 
               {/* Videos */}
               <div>
                 <label className="label">Product Video (optional)</label>
-                <p className="text-xs text-ink-muted mb-3">Upload an MP4 or WebM video. Max 100MB. It will appear as the first item in the gallery on the product page.</p>
+                <p className="text-xs text-ink-muted mb-3">Paste a direct video link (.mp4 or .webm that opens as just the video). It will appear as the first item in the gallery on the product page.</p>
                 <div className="flex flex-wrap gap-3 mb-3">
                   {(editing.product_videos ?? []).map((vid, i) => (
                     <div key={i} className="relative w-32 h-20 rounded-2xl overflow-hidden bg-surface-100 group">
@@ -309,18 +264,16 @@ export default function AdminProducts() {
                       </button>
                     </div>
                   ))}
-                  <button
-                    onClick={() => videoRef.current?.click()}
-                    disabled={videoUploading}
-                    className="w-32 h-20 rounded-2xl border-2 border-dashed border-surface-300 flex flex-col items-center justify-center hover:border-brand-500 transition-colors text-ink-muted hover:text-brand-600"
-                  >
-                    {videoUploading
-                      ? <span className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-                      : <><Upload size={16} /><span className="text-xs mt-1">Upload</span></>
-                    }
-                  </button>
                 </div>
-                <input ref={videoRef} type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={handleVideoUpload} />
+                <textarea
+                  className="input text-sm" rows={2}
+                  placeholder="Paste video link(s) — https://... .mp4"
+                  value={videoLinks}
+                  onChange={e => setVideoLinks(e.target.value)}
+                />
+                <button type="button" onClick={addVideoLinks} className="btn-outline w-full mt-2 flex items-center justify-center gap-2">
+                  <Link2 size={16} /> Add video link
+                </button>
               </div>
 
               {/* Basic fields */}
@@ -517,45 +470,27 @@ export default function AdminProducts() {
                   </label>
                 </div>
 
-                {editing.promo_video_url ? (
-                  <div className="flex items-center gap-3">
+                {isHttpsUrl(editing.promo_video_url) && (
+                  <div className="flex items-center gap-3 mb-3">
                     <video
-                      src={editing.promo_video_url}
+                      src={editing.promo_video_url as string}
                       className="w-16 h-28 object-cover rounded-xl bg-surface-100"
                       muted playsInline
                     />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded-lg inline-block mb-2">✅ Video uploaded</p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => promoRef.current?.click()}
-                          className="btn-secondary text-xs py-1.5 px-3"
-                          disabled={promoUploading}
-                        >
-                          Replace
-                        </button>
-                        <button
-                          onClick={() => setEditing(p => ({ ...p, promo_video_url: null }))}
-                          className="text-xs text-red-500 hover:text-red-600 px-2"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
+                    <button
+                      onClick={() => setEditing(p => ({ ...p, promo_video_url: null }))}
+                      className="text-xs text-red-500 hover:text-red-600 px-2"
+                    >
+                      Remove
+                    </button>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => promoRef.current?.click()}
-                    disabled={promoUploading}
-                    className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-surface-300 hover:border-brand-400 rounded-2xl py-4 text-sm text-ink-muted hover:text-brand-600 transition-colors"
-                  >
-                    {promoUploading
-                      ? <><span className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" /> Uploading...</>
-                      : <><Upload size={16} /> Upload 9:16 Promo Video (MP4, max 100MB)</>
-                    }
-                  </button>
                 )}
-                <input ref={promoRef} type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={handlePromoUpload} />
+                <input
+                  className="input text-sm"
+                  placeholder="Paste 9:16 promo video link (https://... .mp4)"
+                  value={editing.promo_video_url ?? ''}
+                  onChange={e => setEditing(p => ({ ...p, promo_video_url: e.target.value || null }))}
+                />
               </div>
 
               {/* Featured */}

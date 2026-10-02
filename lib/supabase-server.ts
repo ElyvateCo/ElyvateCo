@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
+import { cookieDomainFor } from './cookieDomain'
 import { NextRequest, NextResponse } from 'next/server'
 
 const supabaseUrl     = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -10,17 +11,19 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // on the client — see lib/supabase-merchant.ts).
 export function supabaseServer() {
   const cookieStore = cookies()
+  const h = headers()
+  const domain = cookieDomainFor(h.get('x-forwarded-host') || h.get('host'))
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       get: (name: string) => cookieStore.get(name)?.value,
       set: (name: string, value: string, options: CookieOptions) => {
-        try { cookieStore.set({ name, value, ...options }) } catch {
+        try { cookieStore.set({ name, value, ...options, ...(domain ? { domain } : {}) }) } catch {
           // Called from a Server Component render — cookies can't be set
           // there. Safe to ignore; middleware refreshes the session instead.
         }
       },
       remove: (name: string, options: CookieOptions) => {
-        try { cookieStore.set({ name, value: '', ...options }) } catch {}
+        try { cookieStore.set({ name, value: '', ...options, ...(domain ? { domain } : {}) }) } catch {}
       },
     },
   })
@@ -29,14 +32,15 @@ export function supabaseServer() {
 // Use inside middleware.ts — reads/refreshes the session on the
 // request/response pair middleware works with (no next/headers there).
 export function supabaseMiddleware(req: NextRequest, res: NextResponse) {
+  const domain = cookieDomainFor(req.headers.get('x-forwarded-host') || req.headers.get('host'))
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       get: (name: string) => req.cookies.get(name)?.value,
       set: (name: string, value: string, options: CookieOptions) => {
-        res.cookies.set({ name, value, ...options })
+        res.cookies.set({ name, value, ...options, ...(domain ? { domain } : {}) })
       },
       remove: (name: string, options: CookieOptions) => {
-        res.cookies.set({ name, value: '', ...options })
+        res.cookies.set({ name, value: '', ...options, ...(domain ? { domain } : {}) })
       },
     },
   })

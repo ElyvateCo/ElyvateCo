@@ -1,5 +1,6 @@
 'use client'
 import { createBrowserClient } from '@supabase/ssr'
+import { cookieDomainFor } from './cookieDomain'
 
 // This is deliberately separate from supabaseBrowser() in lib/supabase.ts.
 // That one is for CUSTOMERS and keeps its session in localStorage, which
@@ -16,7 +17,8 @@ export function supabaseMerchantBrowser() {
   if (!_client) {
     _client = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookieOptions: { domain: cookieDomainFor(window.location.host), path: '/', sameSite: 'lax', secure: window.location.protocol === 'https:' } }
     )
   }
   return _client

@@ -1,8 +1,9 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
-import { Plus, Trash2, X, FolderTree, Upload, ImageIcon } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Plus, Trash2, X, FolderTree, ImageIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { Category } from '@/lib/supabase'
+import { isHttpsUrl } from '@/lib/mediaLinks'
 
 const EMPTY_FORM = { name: '', image_url: '' }
 
@@ -12,8 +13,6 @@ export default function AdminCategories() {
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   async function load() {
     setLoading(true)
@@ -27,28 +26,9 @@ export default function AdminCategories() {
 
   function openNew() { setForm(EMPTY_FORM); setModal(true) }
 
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    const formData = new FormData()
-    formData.append('files', file)
-    formData.append('folder', 'categories')
-    try {
-      const res = await fetch('/api/admin/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
-      setForm(f => ({ ...f, image_url: data.urls[0] }))
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed')
-    } finally {
-      setUploading(false)
-      if (fileRef.current) fileRef.current.value = ''
-    }
-  }
-
   async function handleSave() {
     if (!form.name.trim()) { toast.error('Name is required'); return }
+    if (form.image_url.trim() && !isHttpsUrl(form.image_url)) { toast.error('Image link must be a full link starting with https://'); return }
     setSaving(true)
     try {
       const res = await fetch('/api/admin/categories', {
@@ -148,30 +128,17 @@ export default function AdminCategories() {
 
               <div>
                 <label className="label">Image (optional)</label>
-                {form.image_url ? (
-                  <div className="relative rounded-2xl overflow-hidden aspect-video bg-surface-100">
+                {isHttpsUrl(form.image_url) && (
+                  <div className="relative rounded-2xl overflow-hidden aspect-video bg-surface-100 mb-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={form.image_url} alt="" className="w-full h-full object-cover" />
-                    <button
-                      onClick={() => setForm(f => ({ ...f, image_url: '' }))}
-                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/90 text-red-500 hover:bg-red-50"
-                    >
-                      <X size={14} />
-                    </button>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => fileRef.current?.click()}
-                    disabled={uploading}
-                    className="btn-outline w-full flex items-center justify-center gap-2"
-                  >
-                    {uploading
-                      ? <span className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-                      : <Upload size={16} />}
-                    Upload Image
-                  </button>
                 )}
-                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                <input
+                  className="input text-sm" placeholder="Paste image link (https://...)"
+                  value={form.image_url}
+                  onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))}
+                />
                 <p className="text-xs text-ink-muted mt-1.5">Shown as a tile on your homepage. Looks fine without one too.</p>
               </div>
             </div>

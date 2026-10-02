@@ -1,22 +1,14 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import type { HeroSection } from '@/lib/supabase'
-import { uploadLargeFile } from '@/lib/uploadLargeFile'
-import { Upload, Monitor, Smartphone, Video } from 'lucide-react'
+import { isHttpsUrl, checkLink } from '@/lib/mediaLinks'
+import { Monitor, Smartphone, Video } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 
 export default function AdminHero() {
   const [hero, setHero] = useState<Partial<HeroSection>>({})
-  const [uploadingDesktop, setUploadingDesktop] = useState(false)
-  const [uploadingMobile, setUploadingMobile] = useState(false)
-  const [uploadingVideoDesktop, setUploadingVideoDesktop] = useState(false)
-  const [uploadingVideoMobile, setUploadingVideoMobile] = useState(false)
   const [saving, setSaving] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
-  const fileRefMobile = useRef<HTMLInputElement>(null)
-  const videoFileRef = useRef<HTMLInputElement>(null)
-  const videoFileRefMobile = useRef<HTMLInputElement>(null)
 
   const morphWordsPreview = (hero.headline_morph_words ?? '')
     .split(/\r?\n/).map(w => w.trim()).filter(Boolean)
@@ -28,71 +20,14 @@ export default function AdminHero() {
       .then(data => { if (data && !data.error) setHero(data) })
   }, [])
 
-  async function uploadImage(file: File, field: 'bg_image' | 'bg_image_mobile') {
-    const setUploading = field === 'bg_image' ? setUploadingDesktop : setUploadingMobile
-    setUploading(true)
-
-    const formData = new FormData()
-    formData.append('files', file)
-    formData.append('folder', 'hero')
-
-    try {
-      const res = await fetch('/api/admin/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
-      setHero(h => ({ ...h, [field]: data.urls[0] }))
-      toast.success('Image uploaded!')
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  function handleDesktopUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) uploadImage(file, 'bg_image')
-  }
-
-  function handleMobileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) uploadImage(file, 'bg_image_mobile')
-  }
-
-  // Uploading directly to Supabase Storage (via a signed URL) instead of
-  // relying on a pasted link fixes the "sometimes shows, sometimes doesn't"
-  // problem — pasted links depend on whatever third-party site is hosting
-  // them (many block hotlinking, some links aren't direct video files at
-  // all, e.g. a YouTube page URL instead of an .mp4). An uploaded file lives
-  // on your own reliable storage instead.
-  async function uploadVideo(file: File, field: 'bg_video' | 'bg_video_mobile') {
-    const sizeMb = file.size / (1024 * 1024)
-    if (sizeMb > 100) { toast.error(`Video is ${sizeMb.toFixed(0)}MB — max allowed is 100MB.`); return }
-
-    const setUploading = field === 'bg_video' ? setUploadingVideoDesktop : setUploadingVideoMobile
-    setUploading(true)
-    try {
-      const url = await uploadLargeFile(file, { bucket: 'product-videos', folder: field === 'bg_video' ? 'hero' : 'hero-mobile' })
-      setHero(h => ({ ...h, [field]: url }))
-      toast.success('Video uploaded!')
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Video upload failed')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  function handleDesktopVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) uploadVideo(file, 'bg_video')
-  }
-
-  function handleMobileVideoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) uploadVideo(file, 'bg_video_mobile')
-  }
-
   async function handleSave() {
+    for (const [key, label] of [
+      ['bg_image', 'Desktop image link'], ['bg_video', 'Desktop video link'],
+      ['bg_image_mobile', 'Mobile image link'], ['bg_video_mobile', 'Mobile video link'],
+    ] as const) {
+      const r = checkLink(hero[key], label)
+      if (!r.ok) { toast.error(r.error); return }
+    }
     setSaving(true)
     try {
       const res = await fetch('/api/admin/hero', {
@@ -174,23 +109,16 @@ export default function AdminHero() {
               Desktop / Laptop Banner
             </label>
 
-            {hero.bg_image && (
+            {isHttpsUrl(hero.bg_image) && (
               <div className="relative w-full aspect-video rounded-2xl overflow-hidden mb-3 bg-surface-100">
                 <Image src={hero.bg_image} alt="Desktop hero background" fill className="object-cover" />
               </div>
             )}
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={uploadingDesktop}
-              className="btn-outline w-full flex items-center justify-center gap-2"
-            >
-              {uploadingDesktop
-                ? <span className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-                : <Upload size={16} />
-              }
-              {hero.bg_image ? 'Replace Image' : 'Upload Image'}
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleDesktopUpload} />
+            <input
+              className="input text-xs" placeholder="Paste image link (https://...)"
+              value={hero.bg_image ?? ''}
+              onChange={e => setHero(h => ({ ...h, bg_image: e.target.value }))}
+            />
             <p className="text-xs text-ink-muted mt-1.5 mb-3">Recommended: 1920×1080px or larger, landscape</p>
 
             {/* Desktop video */}
@@ -198,30 +126,14 @@ export default function AdminHero() {
               <Video size={14} />
               Video (optional)
             </label>
-            <button
-              onClick={() => videoFileRef.current?.click()}
-              disabled={uploadingVideoDesktop}
-              className="btn-outline w-full flex items-center justify-center gap-2"
-            >
-              {uploadingVideoDesktop
-                ? <span className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-                : <Upload size={16} />
-              }
-              {hero.bg_video ? 'Replace Video' : 'Upload Video'}
-            </button>
-            <input ref={videoFileRef} type="file" accept="video/*" className="hidden" onChange={handleDesktopVideoUpload} />
-            <p className="text-xs text-ink-muted mt-1.5 mb-2">
-              Recommended — uploaded videos always play reliably. Max 100MB.
-            </p>
             <input
-              className="input text-xs" placeholder="...or paste a direct .mp4 link instead"
+              className="input text-xs" placeholder="Paste a direct video link (https://... .mp4)"
               value={hero.bg_video ?? ''}
               onChange={e => setHero(h => ({ ...h, bg_video: e.target.value }))}
             />
             <p className="text-xs text-ink-muted mt-1.5">
-              If set, this video plays instead of the image above. Pasted links depend on where they're hosted and can
-              fail to load (blocked hotlinking, not a direct file, etc.) — uploading is more reliable. The image above is
-              used as a poster/fallback either way.
+              If set, this video plays instead of the image above. Use a direct video file link (.mp4 / .webm) —
+              page links like YouTube won't play here. The image above is used as a poster/fallback either way.
             </p>
           </div>
 
@@ -232,23 +144,16 @@ export default function AdminHero() {
               Mobile Banner
             </label>
 
-            {hero.bg_image_mobile && (
+            {isHttpsUrl(hero.bg_image_mobile) && (
               <div className="relative w-full max-w-[180px] aspect-[9/16] rounded-2xl overflow-hidden mb-3 bg-surface-100">
                 <Image src={hero.bg_image_mobile} alt="Mobile hero background" fill className="object-cover" />
               </div>
             )}
-            <button
-              onClick={() => fileRefMobile.current?.click()}
-              disabled={uploadingMobile}
-              className="btn-outline w-full flex items-center justify-center gap-2"
-            >
-              {uploadingMobile
-                ? <span className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-                : <Upload size={16} />
-              }
-              {hero.bg_image_mobile ? 'Replace Image' : 'Upload Image'}
-            </button>
-            <input ref={fileRefMobile} type="file" accept="image/*" className="hidden" onChange={handleMobileUpload} />
+            <input
+              className="input text-xs" placeholder="Paste image link (https://...)"
+              value={hero.bg_image_mobile ?? ''}
+              onChange={e => setHero(h => ({ ...h, bg_image_mobile: e.target.value }))}
+            />
             <p className="text-xs text-ink-muted mt-1.5 mb-3">Recommended: 1080×1920px (9:16), subject centered. Falls back to desktop image if not set.</p>
 
             {/* Mobile video */}
@@ -256,21 +161,9 @@ export default function AdminHero() {
               <Video size={14} />
               Video (optional)
             </label>
-            <button
-              onClick={() => videoFileRefMobile.current?.click()}
-              disabled={uploadingVideoMobile}
-              className="btn-outline w-full flex items-center justify-center gap-2"
-            >
-              {uploadingVideoMobile
-                ? <span className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-                : <Upload size={16} />
-              }
-              {hero.bg_video_mobile ? 'Replace Video' : 'Upload Video'}
-            </button>
-            <input ref={videoFileRefMobile} type="file" accept="video/*" className="hidden" onChange={handleMobileVideoUpload} />
-            <p className="text-xs text-ink-muted mt-1.5 mb-2">Max 100MB. Falls back to the desktop video if not set.</p>
+            <p className="text-xs text-ink-muted mb-2">Falls back to the desktop video if not set.</p>
             <input
-              className="input text-xs" placeholder="...or paste a direct .mp4 link instead"
+              className="input text-xs" placeholder="Paste a direct video link (https://... .mp4)"
               value={hero.bg_video_mobile ?? ''}
               onChange={e => setHero(h => ({ ...h, bg_video_mobile: e.target.value }))}
             />
@@ -297,7 +190,7 @@ export default function AdminHero() {
                   autoPlay muted loop playsInline
                   className="absolute inset-0 w-full h-full object-cover opacity-70"
                 />
-              ) : hero.bg_image ? (
+              ) : isHttpsUrl(hero.bg_image) ? (
                 <Image src={hero.bg_image} alt="" fill className="object-cover opacity-70" />
               ) : null}
               <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent" />
@@ -329,7 +222,7 @@ export default function AdminHero() {
                   autoPlay muted loop playsInline
                   className="absolute inset-0 w-full h-full object-cover opacity-70"
                 />
-              ) : (hero.bg_image_mobile || hero.bg_image) ? (
+              ) : isHttpsUrl(hero.bg_image_mobile || hero.bg_image) ? (
                 <Image src={(hero.bg_image_mobile || hero.bg_image) as string} alt="" fill className="object-cover opacity-70" />
               ) : null}
               <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent" />

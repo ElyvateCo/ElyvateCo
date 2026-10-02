@@ -19,7 +19,7 @@ const nav = [
   { href: '/admin/settings',   icon: Settings,        label: 'Settings'    },
 ]
 
-export default function AdminSidebar() {
+export default function AdminSidebar({ storeName, storeUrl }: { storeName?: string; storeUrl?: string }) {
   const path   = usePathname()
   const router = useRouter()
   const [newMessages, setNewMessages] = useState(0)
@@ -41,7 +41,7 @@ export default function AdminSidebar() {
     <aside className="w-56 shrink-0 bg-white border-r border-surface-200 min-h-screen flex flex-col">
       <div className="p-6 border-b border-surface-200">
         <p className="font-display text-xl font-semibold text-ink-primary">Elyvate</p>
-        <p className="text-xs text-ink-muted mt-0.5">Admin Panel</p>
+        <p className="text-xs text-ink-muted mt-0.5 truncate">{storeName ? `${storeName} · Admin` : 'Admin Panel'}</p>
       </div>
       <nav className="flex-1 p-3 space-y-0.5">
         {nav.map(({ href, icon: Icon, label }) => {
@@ -58,7 +58,7 @@ export default function AdminSidebar() {
         })}
       </nav>
       <div className="p-3 border-t border-surface-200 space-y-0.5">
-        <a href="/" target="_blank" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-ink-secondary hover:bg-surface-100 transition-colors"><ExternalLink size={16} /> View Store</a>
+        <a href={storeUrl || '/'} target="_blank" rel="noreferrer" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-ink-secondary hover:bg-surface-100 transition-colors"><ExternalLink size={16} /> View Store</a>
         <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-ink-secondary hover:bg-red-50 hover:text-red-600 transition-colors"><LogOut size={16} /> Log Out</button>
       </div>
     </aside>

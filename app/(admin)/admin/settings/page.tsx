@@ -1,15 +1,14 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import type { SiteSettings } from '@/lib/supabase'
-import { Upload, Type, Check, Palette } from 'lucide-react'
+import { Check, Palette } from 'lucide-react'
+import { checkLink, parseCssSafeUrl } from '@/lib/mediaLinks'
 import { THEME_PRESETS, DEFAULT_THEME_PRESET, ThemePresetKey, generateColorScaleHex, isValidHex } from '@/lib/themePresets'
 import toast from 'react-hot-toast'
 
 export default function AdminSettings() {
   const [settings, setSettings] = useState<Partial<SiteSettings>>({})
   const [saving, setSaving] = useState(false)
-  const [uploadingFont, setUploadingFont] = useState(false)
-  const fontFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch('/api/admin/settings')
@@ -17,28 +16,12 @@ export default function AdminSettings() {
       .then(data => { if (data && !data.error) setSettings(data) })
   }, [])
 
-  async function handleFontUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadingFont(true)
-
-    const formData = new FormData()
-    formData.append('files', file)
-    formData.append('folder', 'fonts')
-    formData.append('kind', 'font')
-
-    try {
-      const res = await fetch('/api/admin/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
-      setSettings(s => ({ ...s, custom_font_url: data.urls[0], custom_font_name: file.name.replace(/\.[^.]+$/, '') }))
-      toast.success('Font uploaded! Click "Save Settings" to apply it site-wide.')
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed')
-    } finally {
-      setUploadingFont(false)
-      if (fontFileRef.current) fontFileRef.current.value = ''
-    }
+  function setFontLink(value: string) {
+    // Name shown in the preview is taken from the file name in the link
+    const file = value.split('?')[0].split('/').pop() || ''
+    let name = 'Custom font'
+    try { name = decodeURIComponent(file).replace(/\.[^.]+$/, '') || name } catch {}
+    setSettings(s => ({ ...s, custom_font_url: value || null, custom_font_name: value ? name : null }))
   }
 
   function removeFont() {
@@ -47,6 +30,10 @@ export default function AdminSettings() {
   }
 
   async function handleSave() {
+    const logo = checkLink(settings.logo_url, 'Logo link')
+    if (!logo.ok) { toast.error(logo.error); return }
+    const font = checkLink(settings.custom_font_url, 'Font link', { cssSafe: true })
+    if (!font.ok) { toast.error(font.error + ' (no spaces, quotes or brackets)'); return }
     setSaving(true)
     try {
       const res = await fetch('/api/admin/settings', {
@@ -130,7 +117,7 @@ export default function AdminSettings() {
         <div className="border-t border-surface-200 pt-6">
           <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-4">Typography</p>
 
-          {settings.custom_font_url && (
+          {parseCssSafeUrl(settings.custom_font_url) && (
             <>
               {/* Load the uploaded font just for this admin preview */}
               <style dangerouslySetInnerHTML={{ __html: `
@@ -145,23 +132,11 @@ export default function AdminSettings() {
             </>
           )}
 
-          <button
-            onClick={() => fontFileRef.current?.click()}
-            disabled={uploadingFont}
-            className="btn-outline w-full flex items-center justify-center gap-2"
-          >
-            {uploadingFont
-              ? <span className="w-4 h-4 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
-              : <Type size={16} />
-            }
-            {settings.custom_font_url ? 'Replace Font' : 'Upload Font'}
-          </button>
           <input
-            ref={fontFileRef}
-            type="file"
-            accept=".woff2,.woff,.ttf,.otf"
-            className="hidden"
-            onChange={handleFontUpload}
+            className="input text-sm"
+            placeholder="Paste font link (https://... .woff2 / .woff / .ttf / .otf)"
+            value={settings.custom_font_url ?? ''}
+            onChange={e => setFontLink(e.target.value)}
           />
 
           {settings.custom_font_url && (
@@ -174,9 +149,8 @@ export default function AdminSettings() {
           )}
 
           <p className="text-xs text-ink-muted mt-2">
-            Accepts .woff2, .woff, .ttf, or .otf (max 5MB). Once saved, this font replaces the
-            default typeface across the entire storefront — headlines and body text alike.
-            Changes may take up to a minute to appear due to page caching.
+            Paste a direct link to a .woff2, .woff, .ttf or .otf font file. Once saved, this font
+            replaces the default typeface across your whole storefront — headlines and body text alike.
           </p>
         </div>
 

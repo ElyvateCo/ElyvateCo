@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabase-server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { validateSubdomain } from '@/lib/reservedSubdomains'
 
 export async function POST(req: NextRequest) {
   // Who's asking, verified from their cookie session — never trust a
@@ -20,10 +21,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Store name and subdomain are required' }, { status: 400 })
   }
 
-  const cleanSubdomain = subdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
-  if (!cleanSubdomain) {
-    return NextResponse.json({ error: 'Subdomain can only contain letters, numbers, and dashes' }, { status: 400 })
-  }
+  const check = validateSubdomain(subdomain)
+  if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 })
+  const cleanSubdomain = check.value
 
   const admin = supabaseAdmin()
 

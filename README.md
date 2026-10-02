@@ -13,31 +13,18 @@ cp .env.local.example .env.local
 
 ## 3. Supabase Setup
 1. Go to your Supabase project → SQL Editor → New Query
-2. Paste the entire contents of `supabase-schema.sql` and run it
-3. Go to Storage → New Bucket → Name: `product-images` → Public: ON
+2. Run `supabase-schema.sql`, then `supabase-migration-multitenant.sql` (compare with your live schema first)
 
 ## 4. Get Your Supabase Keys
 - Project URL → Settings → API → Project URL
 - Anon Key → Settings → API → anon public
 - Service Role Key → Settings → API → service_role secret
 
-## 4a. Admin Panel Login (IMPORTANT)
-Set `ADMIN_SECRET` in your `.env.local` (and in Vercel env vars) to a strong password — this is the password you'll use to log into `/rafiixr`.
-
-```env
-ADMIN_SECRET=choose_a_strong_password_here
-```
-
-Visit `/rafiixr` → you'll be redirected to `/rafiixr-login` → enter your `ADMIN_SECRET` value as the password.
-(The admin URL is deliberately obscured from `/admin` to `/rafiixr` to avoid automated bot scanning.)
-
-## 4b. Storage Bucket (REQUIRED for image uploads)
-1. Supabase Dashboard → Storage → **New Bucket**
-2. Name it exactly: `product-images`
-3. Toggle **Public bucket: ON**
-4. Click Create
-
-Without this bucket, image uploads in the admin panel will fail.
+## 4a. Admin panel
+Merchants sign up at /signup, create their store, and manage it at `<their-store>/admin`
+(on a Vercel URL without a domain: `/admin`, and preview a store with `/?store=<subdomain>`).
+Photos, videos and fonts are added by pasting LINKS — there is no file upload, so no
+Storage bucket is needed.
 
 ## 5. Resend Setup
 1. Sign up at resend.com (free)
@@ -57,7 +44,7 @@ npm run dev
 Open http://localhost:3000
 
 ## 8. Admin Panel
-Visit http://localhost:3000/rafiixr
+Visit http://localhost:3000/admin
 
 ## 9. Deploy to Vercel
 1. Push to GitHub
@@ -74,8 +61,8 @@ Visit http://localhost:3000/rafiixr
 | /cart | Shopping cart |
 | /checkout | Checkout |
 | /order-success | Order confirmation |
-| /rafiixr | Admin dashboard |
-| /rafiixr/products | Manage products |
-| /rafiixr/orders | View & update orders |
-| /rafiixr/hero | Edit hero section |
-| /rafiixr/settings | Store settings |
+| /admin | Admin dashboard |
+| /admin/products | Manage products |
+| /admin/orders | View & update orders |
+| /admin/hero | Edit hero section |
+| /admin/settings | Store settings |

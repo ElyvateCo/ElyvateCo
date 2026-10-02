@@ -231,7 +231,11 @@ export async function POST(req: NextRequest) {
     }
 
     const sellerId  = process.env.TWOCHECKOUT_SELLER_ID
-    const appUrl    = process.env.NEXT_PUBLIC_APP_URL
+    // Send the customer back to THIS store's own address (already verified
+    // above via getCurrentStore), not one global URL.
+    const reqHost  = req.headers.get('x-forwarded-host') || req.headers.get('host')
+    const reqProto = req.headers.get('x-forwarded-proto') || 'https'
+    const appUrl    = reqHost ? `${reqProto}://${reqHost}` : process.env.NEXT_PUBLIC_APP_URL
     const returnUrl = encodeURIComponent(`${appUrl}/order-success?order=${order.id}`)
     const cancelUrl = encodeURIComponent(`${appUrl}/checkout`)
 

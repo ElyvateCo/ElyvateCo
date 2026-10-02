@@ -7,17 +7,10 @@ const nextConfig = {
   reactStrictMode: true,
 
   images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: '**.supabase.co' },
-      { protocol: 'https', hostname: '**.supabase.in' },
-    ],
-  },
-  // Increase body size limit for video uploads (default is 4.5MB which
-  // is too small for video files — this raises it to 110MB)
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '110mb',
-    },
+    // Merchants paste photo LINKS from any website, so Next.js can't have an
+    // allow-list of image hosts. Serving the links as-is (no Vercel image
+    // optimizer) also avoids optimizer limits/costs on the free plan.
+    unoptimized: true,
   },
 }
 
