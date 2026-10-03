@@ -65,17 +65,18 @@ export async function middleware(req: NextRequest) {
     res.cookies.set(PREVIEW_COOKIE, '', { path: '/', maxAge: 0 })
   }
 
-  // ── Admin panel page gate ───────────────────────────────────────────────
-  // Every /admin/* PAGE needs a real, logged-in merchant session — checked
-  // via Supabase Auth (cookie-based). This replaced the old single shared
-  // ADMIN_SECRET password. This is the actual thing standing between a
-  // random visitor and the admin panel — without it, a page that fetches
-  // its own data directly (like the dashboard) would render for anyone who
-  // just knows the URL, regardless of what any individual API route checks.
-  if (pathname.startsWith('/admin') || pathname === '/onboarding') {
+  // ── Login session ───────────────────────────────────────────────────────
+  // The admin panel's address is chosen by each merchant, so access control
+  // for admin pages lives in the admin layout (it 404s anyone who isn't the
+  // store's owner). The middleware's job here:
+  //  1. /onboarding needs a logged-in merchant
+  //  2. keep a merchant's login session fresh (refreshes expiring tokens
+  //     into cookies — server components can't write cookies themselves)
+  const hasMerchantSession = req.cookies.getAll().some(c => c.name.startsWith('sb-') && c.name.includes('auth-token'))
+  if (pathname === '/onboarding' || (hasMerchantSession && !pathname.startsWith('/api/'))) {
     const sb = supabaseMiddleware(req, res)
     const { data: { user } } = await sb.auth.getUser()
-    if (!user) {
+    if (!user && pathname === '/onboarding') {
       const loginUrl = new URL('/login', req.url)
       loginUrl.searchParams.set('redirect', pathname)
       return NextResponse.redirect(loginUrl)

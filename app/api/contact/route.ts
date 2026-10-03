@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
                 ${orderId ? `<tr><td style="padding:8px;color:#666">Order ID</td><td style="padding:8px;font-family:monospace">#${orderId.toUpperCase()}</td></tr>` : ''}
                 <tr style="background:#f8f8f8"><td style="padding:8px;color:#666;vertical-align:top">Message</td><td style="padding:8px">${message.replace(/\n/g, '<br/>')}</td></tr>
               </table>
-              <a href="${appUrl}/admin/contact" style="display:inline-block;background:${brandColor};color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:600">View in Admin Panel</a>
+              <a href="${appUrl}/go-admin?to=contact" style="display:inline-block;background:${brandColor};color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:600">View in Admin Panel</a>
             </div>
           `,
         })

@@ -82,7 +82,7 @@ export default async function PlatformLandingPage() {
 
   // Signed-in merchant: swap every "log in / sign up" prompt for direct
   // links into their own store, instead of asking them to sign up again.
-  const primaryHref  = store ? '/admin' : '/signup'
+  const primaryHref  = store ? '/go-admin' : '/signup'
   const primaryLabel = store ? 'Go to admin panel' : 'Start your free store'
 
   return (
@@ -104,7 +104,7 @@ export default async function PlatformLandingPage() {
                 <Link href={storeLink(store.subdomain)} className="text-sm font-medium px-3 py-2 text-ink-secondary hover:text-ink-primary">
                   My store
                 </Link>
-                <Link href="/admin" className="btn-primary !px-4 !py-2">Admin panel</Link>
+                <Link href="/go-admin" className="btn-primary !px-4 !py-2">Admin panel</Link>
               </>
             ) : user ? (
               <Link href="/onboarding" className="btn-primary !px-4 !py-2">Finish setup</Link>
@@ -258,7 +258,7 @@ export default async function PlatformLandingPage() {
           <span>© {new Date().getFullYear()} Elyvate. All rights reserved.</span>
           <div className="flex gap-5">
             {store ? (
-              <Link href="/admin" className="hover:text-ink-primary">Admin panel</Link>
+              <Link href="/go-admin" className="hover:text-ink-primary">Admin panel</Link>
             ) : (
               <>
                 <Link href="/login" className="hover:text-ink-primary">Log in</Link>

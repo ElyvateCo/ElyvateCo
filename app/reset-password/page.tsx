@@ -33,8 +33,7 @@ export default function ResetPasswordPage() {
     if (error) { toast.error(error.message); return }
 
     toast.success('Password updated!')
-    router.push('/admin')
-    router.refresh()
+    window.location.assign('/go-admin')
   }
 
   return (

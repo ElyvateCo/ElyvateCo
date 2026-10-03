@@ -13,7 +13,9 @@ function LoginForm() {
   const [loading, setLoading]   = useState(false)
   const router = useRouter()
   const params = useSearchParams()
-  const redirect = params.get('redirect') || '/admin'
+  const rawRedirect = params.get('redirect') || '/go-admin'
+  // Only ever redirect to a path on this site
+  const redirect = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/go-admin'
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -22,8 +24,7 @@ function LoginForm() {
     const { error } = await sb.auth.signInWithPassword({ email, password })
     setLoading(false)
     if (error) { toast.error(error.message); return }
-    router.push(redirect)
-    router.refresh()
+    window.location.assign(redirect)
   }
 
   // Wired up now — starts working the moment Google is enabled in

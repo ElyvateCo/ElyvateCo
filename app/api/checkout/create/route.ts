@@ -4,8 +4,12 @@ import { sendAdminOrderNotification, sendCustomerConfirmation } from '@/lib/rese
 import { getCurrentStore } from '@/lib/currentStore'
 import { rateLimit, getIP, limits } from '@/lib/rateLimit'
 import { normalizeBDPhone } from '@/lib/phone'
+import { getRequestOrigin } from '@/lib/requestOrigin'
+import { loadGatewayCreds } from '@/lib/gateways/credentials'
+import { bkashCreatePayment, type BkashCreds } from '@/lib/gateways/bkash'
+import { nagadCreatePayment, type NagadCreds } from '@/lib/gateways/nagad'
 
-const PAYMENT_METHODS = ['cod', 'bkash_manual', 'nagad_manual', 'crypto_usdt'] as const
+const PAYMENT_METHODS = ['cod', 'bkash_manual', 'nagad_manual', 'bkash_auto', 'nagad_auto', 'crypto_usdt'] as const
 type PaymentMethod = typeof PAYMENT_METHODS[number]
 
 function sanitize(input: unknown): string {
@@ -72,12 +76,13 @@ export async function POST(req: NextRequest) {
     // the request — so a customer can't point money at anyone else.
     const { data: settings } = await db
       .from('site_settings')
-      .select('cod_enabled, bkash_enabled, bkash_number, bkash_type, nagad_enabled, nagad_number, nagad_type, crypto_usdt_enabled, crypto_usdt_address, crypto_usdt_network')
+      .select('cod_enabled, bkash_enabled, bkash_number, bkash_type, nagad_enabled, nagad_number, nagad_type, bkash_auto_enabled, nagad_auto_enabled, crypto_usdt_enabled, crypto_usdt_address, crypto_usdt_network')
       .eq('store_id', store.id)
       .maybeSingle()
 
     let cryptoConfig: { address: string; network: string } | null = null
     let manualWallet: { provider: 'bkash' | 'nagad'; number: string; accountType: string } | null = null
+    let autoProvider: 'bkash' | 'nagad' | null = null
 
     if (paymentMethod === 'cod') {
       // A store with no settings yet accepts cash on delivery by default
@@ -94,6 +99,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Nagad payment is not available at this store' }, { status: 400 })
       }
       manualWallet = { provider: 'nagad', number: settings.nagad_number, accountType: settings.nagad_type || 'personal' }
+    } else if (paymentMethod === 'bkash_auto' || paymentMethod === 'nagad_auto') {
+      const provider = paymentMethod === 'bkash_auto' ? 'bkash' : 'nagad'
+      const on = provider === 'bkash' ? settings?.bkash_auto_enabled : settings?.nagad_auto_enabled
+      if (!on) {
+        return NextResponse.json({ error: `Online ${provider === 'bkash' ? 'bKash' : 'Nagad'} payment is not available at this store` }, { status: 400 })
+      }
+      autoProvider = provider
     } else if (paymentMethod === 'crypto_usdt') {
       if (!settings?.crypto_usdt_enabled || !settings.crypto_usdt_address) {
         return NextResponse.json({ error: 'Crypto payment is not currently available' }, { status: 400 })
@@ -186,7 +198,28 @@ export async function POST(req: NextRequest) {
       // (or not) at the cart step; this is just the final authoritative check.
     }
 
-    const finalTotal = parseFloat((subtotal - discountAmount).toFixed(2))
+    // Delivery charge comes from the store's delivery zones — decided HERE,
+    // never taken from the browser. A store with no zones delivers free.
+    const { data: zones } = await db
+      .from('delivery_zones')
+      .select('id, name, charge, free_over')
+      .eq('store_id', store.id)
+      .eq('is_active', true)
+    let deliveryCharge = 0
+    let deliveryZoneName: string | null = null
+    if (zones && zones.length > 0) {
+      const zone = zones.find(z => z.id === body.deliveryZoneId)
+      if (!zone) {
+        return NextResponse.json({ error: 'Please choose your delivery area' }, { status: 400 })
+      }
+      const afterDiscount = subtotal - discountAmount
+      deliveryCharge = zone.free_over !== null && zone.free_over !== undefined && afterDiscount >= Number(zone.free_over)
+        ? 0
+        : Number(zone.charge)
+      deliveryZoneName = zone.name
+    }
+
+    const finalTotal = parseFloat((subtotal - discountAmount + deliveryCharge).toFixed(2))
 
     const productName = lineItems.map(i => `${i.name} × ${i.quantity}`).join(', ')
     const totalQuantity = lineItems.reduce((s, i) => s + i.quantity, 0)
@@ -213,11 +246,54 @@ export async function POST(req: NextRequest) {
         order_status:     'processing',
         coupon_code:      appliedCouponCode,
         discount_amount:  discountAmount,
+        delivery_charge:  deliveryCharge,
+        delivery_zone:    deliveryZoneName,
       })
       .select()
       .single()
 
     if (error) throw error
+
+    // Automatic bKash / Nagad: ask the gateway for a payment link BEFORE
+    // anything else is counted. If it fails the order is cancelled, so the
+    // customer can simply try another method.
+    let autoPaymentUrl: string | null = null
+    if (autoProvider) {
+      try {
+        const origin = getRequestOrigin(req)
+        const callbackURL = `${origin}/api/payments/${autoProvider}/callback?order=${order.id}`
+        if (autoProvider === 'bkash') {
+          const loaded = await loadGatewayCreds<BkashCreds>(store.id, 'bkash')
+          if (!loaded) throw new Error('bKash is not connected for this store')
+          const pay = await bkashCreatePayment(loaded.creds, loaded.mode, {
+            amount: finalTotal,
+            invoice: order.id.replace(/-/g, '').slice(0, 20),
+            callbackURL,
+            payerReference: form.phone,
+          })
+          await db.from('orders').update({ gateway_payment_id: pay.paymentID }).eq('id', order.id)
+          autoPaymentUrl = pay.bkashURL
+        } else {
+          const loaded = await loadGatewayCreds<NagadCreds>(store.id, 'nagad')
+          if (!loaded) throw new Error('Nagad is not connected for this store')
+          const pay = await nagadCreatePayment(loaded.creds, loaded.mode, {
+            orderUuid: order.id,
+            amount: finalTotal,
+            callbackURL,
+            ip: getIP(req),
+          })
+          await db.from('orders').update({ gateway_payment_id: pay.paymentRefId }).eq('id', order.id)
+          autoPaymentUrl = pay.redirectUrl
+        }
+      } catch (gatewayErr) {
+        console.error('Gateway start failed:', gatewayErr)
+        await db.from('orders').update({ payment_status: 'failed', order_status: 'cancelled' }).eq('id', order.id)
+        return NextResponse.json(
+          { error: 'We could not start the online payment. Please try another payment method.' },
+          { status: 502 }
+        )
+      }
+    }
 
     if (appliedCouponCode) {
       const { data: coupon } = await db
@@ -236,7 +312,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    try {
+    // Online-paid orders are announced only once the payment is confirmed
+    // (see /api/payments/*/callback); everything else is announced now.
+    if (!autoProvider) try {
       await Promise.all([
         sendAdminOrderNotification(order),
         // Email is optional at checkout — only email customers who gave one
@@ -257,6 +335,10 @@ export async function POST(req: NextRequest) {
           reference: order.id.slice(0, 8).toUpperCase(),
         },
       })
+    }
+
+    if (autoPaymentUrl) {
+      return NextResponse.json({ orderId: order.id, paymentUrl: autoPaymentUrl })
     }
 
     if (manualWallet) {

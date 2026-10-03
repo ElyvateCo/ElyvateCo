@@ -13,7 +13,7 @@ cp .env.local.example .env.local
 
 ## 3. Supabase Setup
 1. Go to your Supabase project → SQL Editor → New Query
-2. Run `supabase-schema.sql`, then `supabase-migration-multitenant.sql` (compare with your live schema first), then `supabase-migration-bd-payments.sql` (Cash on Delivery, bKash, Nagad)
+2. Run `supabase-schema.sql`, then `supabase-migration-multitenant.sql` (compare with your live schema first), then `supabase-migration-bd-payments.sql` (Cash on Delivery, bKash, Nagad), then `supabase-migration-gateways-delivery-admin.sql` (online bKash/Nagad, delivery areas, custom admin address)
 
 ## 4. Get Your Supabase Keys
 - Project URL → Settings → API → Project URL
@@ -22,7 +22,7 @@ cp .env.local.example .env.local
 
 ## 4a. Admin panel
 Merchants sign up at /signup, create their store, and manage it at `<their-store>/admin`
-(on a Vercel URL without a domain: `/admin`, and preview a store with `/?store=<subdomain>`).
+(the address starts as `/admin` but each merchant can rename it in Settings; `/go-admin` always finds it. On a Vercel URL without a domain preview a store with `/?store=<subdomain>`).
 Photos, videos and fonts are added by pasting LINKS — there is no file upload, so no
 Storage bucket is needed.
 

@@ -4,7 +4,7 @@ import { supabaseServer } from '@/lib/supabase-server'
 
 // Pages whose login session must live in COOKIES (merchant side), so that
 // middleware and server components can see it.
-const MERCHANT_PATHS = ['/admin', '/onboarding', '/reset-password']
+const MERCHANT_PATHS = ['/go-admin', '/onboarding', '/reset-password']
 
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url)
@@ -30,6 +30,15 @@ export async function GET(req: NextRequest) {
     const { error } = await supabaseServer().auth.verifyOtp({ type: 'recovery', token_hash: tokenHash })
     if (error) return NextResponse.redirect(`${origin}/forgot-password?error=expired`)
     return NextResponse.redirect(`${origin}/reset-password`)
+  }
+
+  // "Confirm your email" link (works in any browser/app, like the reset link).
+  // Merchant-only: lands in the onboarding wizard (or their admin).
+  if (tokenHash && (type === 'signup' || type === 'email' || type === 'magiclink')) {
+    const { error } = await supabaseServer().auth.verifyOtp({ type, token_hash: tokenHash })
+    if (error) return NextResponse.redirect(`${origin}/login?error=link-expired`)
+    const dest = MERCHANT_PATHS.some(p => next.startsWith(p)) ? next : '/onboarding'
+    return NextResponse.redirect(`${origin}${dest}`)
   }
 
   if (code) {

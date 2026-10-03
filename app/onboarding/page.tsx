@@ -12,7 +12,7 @@ export default async function OnboardingPage() {
 
   const store = await getOwnedStore()
   // Already finished setup → straight to the dashboard
-  if (store && store.onboarding_completed !== false) redirect('/admin')
+  if (store && store.onboarding_completed !== false) redirect('/go-admin')
 
   // Load anything already saved so the wizard resumes where they left off
   let settings: Record<string, string | null> | null = null
@@ -29,8 +29,9 @@ export default async function OnboardingPage() {
 
   const initial: OnboardingInitial = {
     needsStore: !store,
-    storeName: store?.store_name ?? '',
-    subdomain: store?.subdomain ?? null,
+    // No store yet (e.g. they just confirmed their email): prefill what they typed at signup
+    storeName: store?.store_name ?? (typeof user.user_metadata?.store_name === 'string' ? user.user_metadata.store_name : ''),
+    subdomain: store?.subdomain ?? (typeof user.user_metadata?.subdomain === 'string' ? user.user_metadata.subdomain : null),
     businessCategory: store?.business_category ?? '',
     tagline: hero?.subheadline ?? '',
     themePreset: settings?.theme_preset ?? 'indigo',

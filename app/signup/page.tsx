@@ -1,9 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mail, Lock, Store, Loader2 } from 'lucide-react'
 import { supabaseMerchantBrowser } from '@/lib/supabase-merchant'
 import toast from 'react-hot-toast'
+
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'elyvateco.com'
 
 export default function MerchantSignupPage() {
   const [storeName, setStoreName] = useState('')
@@ -11,16 +13,80 @@ export default function MerchantSignupPage() {
   const [email, setEmail]         = useState('')
   const [password, setPassword]   = useState('')
   const [loading, setLoading]     = useState(false)
+  // Set when Supabase requires the email to be confirmed before logging in
+  const [awaitingEmail, setAwaitingEmail] = useState(false)
+  const [resendWait, setResendWait] = useState(0)
   const router = useRouter()
+
+  useEffect(() => {
+    if (resendWait <= 0) return
+    const t = setTimeout(() => setResendWait(w => w - 1), 1000)
+    return () => clearTimeout(t)
+  }, [resendWait])
+
+  // The email link comes back through /auth/callback, which signs them in
+  // and drops them in the onboarding wizard (it finishes creating the store).
+  function confirmRedirect() {
+    return `${window.location.origin}/auth/callback?next=/onboarding`
+  }
+
+  function friendlyAuthError(message: string): string {
+    if (/rate limit/i.test(message)) return 'Too many emails were sent. Please wait a few minutes and try again.'
+    if (/sending .*email|not authorized|smtp/i.test(message)) {
+      return `We couldn't send the verification email right now. (${message})`
+    }
+    if (/already registered|already been registered/i.test(message)) return 'An account with this email already exists. Please log in instead.'
+    return message
+  }
+
+  async function resendEmail() {
+    const sb = supabaseMerchantBrowser()
+    const { error } = await sb.auth.resend({ type: 'signup', email, options: { emailRedirectTo: confirmRedirect() } })
+    if (error) { toast.error(friendlyAuthError(error.message)); return }
+    toast.success('Email sent again')
+    setResendWait(60)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     const sb = supabaseMerchantBrowser()
 
-    const { data, error } = await sb.auth.signUp({ email, password })
+    // 1. Make sure the store address is free BEFORE creating the account
+    const check = await fetch(`/api/store/check-subdomain?subdomain=${encodeURIComponent(subdomain.trim())}`).then(r => r.json()).catch(() => null)
+    if (!check || !check.available) {
+      toast.error(check?.error || 'Could not check that store address')
+      setLoading(false)
+      return
+    }
+
+    // 2. Create the account. The store name/address ride along so they
+    //    survive the "confirm your email" step.
+    const { data, error } = await sb.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: confirmRedirect(),
+        data: { store_name: storeName.trim(), subdomain: check.subdomain },
+      },
+    })
     if (error || !data.user) {
-      toast.error(error?.message || 'Could not create account')
+      toast.error(friendlyAuthError(error?.message || 'Could not create account'))
+      setLoading(false)
+      return
+    }
+    // Supabase hides "this email already exists" by returning a user with no identities
+    if (data.user.identities && data.user.identities.length === 0) {
+      toast.error('An account with this email already exists. Please log in instead.')
+      setLoading(false)
+      return
+    }
+
+    // 3. Email confirmation is ON in Supabase: no session yet. The store is
+    //    created in onboarding right after they click the link in the email.
+    if (!data.session) {
+      setAwaitingEmail(true)
+      setResendWait(60)
       setLoading(false)
       return
     }
@@ -53,6 +119,27 @@ export default function MerchantSignupPage() {
     })
   }
 
+  if (awaitingEmail) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-50 section-pad">
+        <div className="card p-8 w-full max-w-sm text-center">
+          <div className="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center mx-auto mb-4">
+            <Mail size={26} className="text-brand-600" />
+          </div>
+          <h1 className="font-display text-2xl font-semibold mb-2">Check your email</h1>
+          <p className="text-sm text-ink-secondary mb-6">
+            We sent a confirmation link to <span className="font-medium text-ink-primary">{email}</span>.
+            Open it to finish creating <span className="font-medium text-ink-primary">{storeName}</span>. Check your spam folder too.
+          </p>
+          <button onClick={resendEmail} disabled={resendWait > 0} className="btn-outline w-full disabled:opacity-60">
+            {resendWait > 0 ? `Send again in ${resendWait}s` : 'Send the email again'}
+          </button>
+          <a href="/login" className="block text-sm text-ink-muted hover:text-brand-600 mt-5">Already confirmed? Log in</a>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-50 section-pad">
       <div className="card p-8 w-full max-w-sm">
@@ -75,7 +162,7 @@ export default function MerchantSignupPage() {
               <input required className="input rounded-r-none" placeholder="myshop"
                 value={subdomain} onChange={e => setSubdomain(e.target.value)} />
               <span className="px-3 py-2.5 bg-surface-100 border border-l-0 border-surface-200 rounded-r-xl text-sm text-ink-muted whitespace-nowrap">
-                .elyvate.com
+                .{ROOT_DOMAIN}
               </span>
             </div>
           </div>

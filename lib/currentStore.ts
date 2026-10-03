@@ -8,6 +8,7 @@ export type CurrentStore = {
   store_name: string
   subdomain: string
   custom_domain: string | null
+  admin_path?: string | null
   plan: 'free' | 'premium'
 }
 
@@ -32,7 +33,7 @@ function getHost(): string {
 // database once.
 export const getCurrentStore = cache(async (): Promise<CurrentStore | null> => {
   const db = supabaseAdmin()
-  const cols = 'id, store_name, subdomain, custom_domain, plan'
+  const cols = 'id, store_name, subdomain, custom_domain, plan, admin_path'
 
   // TEMPORARY preview helper — see middleware.ts. Lets you test any store
   // via ?store=xyz on the shared vercel.app URL, before a real domain

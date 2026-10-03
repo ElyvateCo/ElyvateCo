@@ -75,7 +75,10 @@ export type Order = {
   quantity: number
   total_price: number
   payment_status: 'pending' | 'paid' | 'failed'
-  payment_method: 'card' | 'crypto_usdt' | 'cod' | 'bkash_manual' | 'nagad_manual'
+  payment_method: 'card' | 'crypto_usdt' | 'cod' | 'bkash_manual' | 'nagad_manual' | 'bkash_auto' | 'nagad_auto'
+  delivery_charge?: number
+  delivery_zone?: string | null
+  gateway_payment_id?: string | null
   payment_trx_id?: string | null
   payment_sender_number?: string | null
   crypto_amount: number | null
@@ -124,6 +127,8 @@ export type SiteSettings = {
   crypto_usdt_address: string | null
   crypto_usdt_network: string | null
   cod_enabled?: boolean
+  bkash_auto_enabled?: boolean
+  nagad_auto_enabled?: boolean
   bkash_enabled?: boolean
   bkash_number?: string | null
   bkash_type?: 'personal' | 'agent' | 'merchant'

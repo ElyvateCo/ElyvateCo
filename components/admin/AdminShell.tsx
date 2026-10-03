@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Menu, X, ExternalLink, LogOut } from 'lucide-react'
 import AdminSidebar from './AdminSidebar'
 import AdminLightModeGuard from './AdminLightModeGuard'
+import { AdminPathProvider } from './AdminPathContext'
 import { supabaseMerchantBrowser } from '@/lib/supabase-merchant'
 
 // Same cookie middleware.ts uses for the ?store= preview
@@ -14,10 +15,11 @@ type Props = {
   subdomain: string
   storeUrl: string      // where "View Store" goes
   storeLabel: string    // short address shown under the store name
+  adminPath: string     // this store's admin address, e.g. "admin"
   children: React.ReactNode
 }
 
-export default function AdminShell({ storeName, subdomain, storeUrl, storeLabel, children }: Props) {
+export default function AdminShell({ storeName, subdomain, storeUrl, storeLabel, adminPath, children }: Props) {
   const router = useRouter()
   const path = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -45,6 +47,7 @@ export default function AdminShell({ storeName, subdomain, storeUrl, storeLabel,
   }
 
   return (
+    <AdminPathProvider value={adminPath}>
     <div className="min-h-screen bg-surface-50 lg:flex">
       <AdminLightModeGuard />
 
@@ -112,5 +115,6 @@ export default function AdminShell({ storeName, subdomain, storeUrl, storeLabel,
         </main>
       </div>
     </div>
+    </AdminPathProvider>
   )
 }

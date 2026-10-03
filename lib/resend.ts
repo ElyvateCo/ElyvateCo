@@ -129,7 +129,7 @@ export async function sendAdminOrderNotification(order: Order) {
         <p style="background:#fff3cd; padding:12px; border-radius:8px;">
           ⚡ <strong>Action Required:</strong> Log into CJ Dropshipping and place this order manually using the customer address above.
         </p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/admin/orders" 
+        <a href="${process.env.NEXT_PUBLIC_APP_URL}/go-admin?to=orders" 
            style="display:inline-block; background:${brandColor}; color:white; padding:12px 24px; border-radius:8px; text-decoration:none; margin-top:10px;">
           View in Admin Panel
         </a>

@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
       owner_user_id: user.id,
       store_name: storeName.trim(),
       subdomain: cleanSubdomain,
+      admin_path: 'admin',
     })
     .select()
     .single()

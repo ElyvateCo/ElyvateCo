@@ -27,7 +27,9 @@ type CouponState = {
   finalTotal: number
 } | null
 
-type PayMethod = 'cod' | 'bkash_manual' | 'nagad_manual' | 'crypto_usdt'
+type PayMethod = 'cod' | 'bkash_manual' | 'nagad_manual' | 'bkash_auto' | 'nagad_auto' | 'crypto_usdt'
+
+type DeliveryZone = { id: string; name: string; charge: number; free_over: number | null }
 
 type AccountType = 'personal' | 'agent' | 'merchant'
 
@@ -76,6 +78,10 @@ export default function CheckoutPage() {
   const [showMethodModal, setShowMethodModal] = useState(false)
   const [cryptoEnabled, setCryptoEnabled] = useState(false)
   const [codEnabled, setCodEnabled] = useState(true)
+  const [bkashAuto, setBkashAuto] = useState(false)
+  const [nagadAuto, setNagadAuto] = useState(false)
+  const [zones, setZones] = useState<DeliveryZone[]>([])
+  const [zoneId, setZoneId] = useState('')
   const [bkash, setBkash] = useState<{ number: string; type: AccountType } | null>(null)
   const [nagad, setNagad] = useState<{ number: string; type: AccountType } | null>(null)
   const [cryptoResult, setCryptoResult] = useState<CryptoPaymentInfo | null>(null)
@@ -90,6 +96,25 @@ export default function CheckoutPage() {
   const [proofSent, setProofSent] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
+
+  // Back from bKash / Nagad without paying
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get('payment')
+    if (p === 'cancelled') toast.error('Payment was cancelled. You can try again or choose another method.')
+    else if (p === 'failed') toast.error('The payment did not go through. Please try again or choose another method.')
+  }, [])
+
+  // Delivery areas + charges set by the store owner
+  useEffect(() => {
+    if (!storeId) return
+    supabase
+      .from('delivery_zones')
+      .select('id, name, charge, free_over')
+      .eq('store_id', storeId)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .then(({ data }) => setZones((data ?? []) as DeliveryZone[]))
+  }, [storeId])
   useEffect(() => {
     if (mounted && items.length === 0 && !cryptoResult && !manualResult) router.push('/cart')
   }, [mounted, items.length, router, cryptoResult, manualResult])
@@ -98,11 +123,13 @@ export default function CheckoutPage() {
     if (!storeId) return
     supabase
       .from('site_settings')
-      .select('crypto_usdt_enabled, cod_enabled, bkash_enabled, bkash_number, bkash_type, nagad_enabled, nagad_number, nagad_type')
+      .select('crypto_usdt_enabled, cod_enabled, bkash_enabled, bkash_number, bkash_type, nagad_enabled, nagad_number, nagad_type, bkash_auto_enabled, nagad_auto_enabled')
       .eq('store_id', storeId)
       .maybeSingle()
       .then(({ data }) => {
         setCryptoEnabled(!!data?.crypto_usdt_enabled)
+        setBkashAuto(!!data?.bkash_auto_enabled)
+        setNagadAuto(!!data?.nagad_auto_enabled)
         // A store that hasn't configured anything yet accepts cash on delivery
         setCodEnabled(data ? data.cod_enabled !== false : true)
         setBkash(data?.bkash_enabled && data.bkash_number ? { number: data.bkash_number, type: (data.bkash_type || 'personal') as AccountType } : null)
@@ -122,7 +149,12 @@ export default function CheckoutPage() {
     setForm(f => ({ ...f, [k]: e.target.value }))
 
   const cartTotal = total()
-  const finalTotal = appliedCoupon ? appliedCoupon.finalTotal : cartTotal
+  const discountedTotal = appliedCoupon ? appliedCoupon.finalTotal : cartTotal
+  const selectedZone = zones.find(z => z.id === zoneId) ?? null
+  const deliveryCharge = selectedZone
+    ? (selectedZone.free_over !== null && discountedTotal >= Number(selectedZone.free_over) ? 0 : Number(selectedZone.charge))
+    : 0
+  const finalTotal = discountedTotal + deliveryCharge
 
   async function applyCoupon() {
     if (!couponInput.trim()) return
@@ -162,6 +194,10 @@ export default function CheckoutPage() {
       toast.error('Please enter a valid mobile number, like 01712345678')
       return
     }
+    if (zones.length > 0 && !zoneId) {
+      toast.error('Please choose your delivery area')
+      return
+    }
     setShowMethodModal(true)
   }
 
@@ -190,6 +226,7 @@ export default function CheckoutPage() {
           couponCode: appliedCoupon?.code ?? null,
           discountAmount: appliedCoupon?.discountAmount ?? 0,
           paymentMethod: method,
+          deliveryZoneId: zoneId || null,
         }),
       })
       const data = await res.json()
@@ -204,6 +241,11 @@ export default function CheckoutPage() {
         setCryptoResult(data.crypto)
         clearCart()
         setLoading(false)
+      } else if (method === 'bkash_auto' || method === 'nagad_auto') {
+        // Off to bKash / Nagad to pay. The cart stays until the payment is
+        // confirmed (the order-success page clears it).
+        window.location.href = data.paymentUrl
+        return
       } else if (method === 'cod') {
         // Nothing to pay online — straight to the confirmation page
         window.location.href = `/order-success?order=${data.orderId}&method=cod`
@@ -451,6 +493,17 @@ export default function CheckoutPage() {
                     <label className="label">Full Address</label>
                     <input required className="input" placeholder="House, road, area" value={form.address} onChange={update('address')} />
                   </div>
+                  {zones.length > 0 && (
+                    <div className="sm:col-span-2">
+                      <label className="label">Delivery Area</label>
+                      <select required className="input" value={zoneId} onChange={e => setZoneId(e.target.value)}>
+                        <option value="">Choose your area…</option>
+                        {zones.map(z => (
+                          <option key={z.id} value={z.id}>{z.name} — {formatPrice(z.charge)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="label">District / City</label>
                     <input required className="input" placeholder="e.g. Dhaka" value={form.city} onChange={update('city')} />
@@ -470,8 +523,8 @@ export default function CheckoutPage() {
                 </div>
                 <p className="text-sm text-ink-secondary">
                   You&apos;ll choose how to pay on the next step
-                  {[codEnabled && 'Cash on Delivery', bkash && 'bKash', nagad && 'Nagad', cryptoEnabled && 'USDT'].filter(Boolean).length > 0
-                    ? ` — ${[codEnabled && 'Cash on Delivery', bkash && 'bKash', nagad && 'Nagad', cryptoEnabled && 'USDT'].filter(Boolean).join(', ')}.`
+                  {[codEnabled && 'Cash on Delivery', (bkash || bkashAuto) && 'bKash', (nagad || nagadAuto) && 'Nagad', cryptoEnabled && 'USDT'].filter(Boolean).length > 0
+                    ? ` — ${[codEnabled && 'Cash on Delivery', (bkash || bkashAuto) && 'bKash', (nagad || nagadAuto) && 'Nagad', cryptoEnabled && 'USDT'].filter(Boolean).join(', ')}.`
                     : '.'}
                 </p>
               </div>
@@ -490,8 +543,12 @@ export default function CheckoutPage() {
                   </div>
                 ))}
                 <div className="flex justify-between text-sm text-ink-secondary">
-                  <span>Shipping</span>
-                  <span className="text-green-600 font-medium">Free</span>
+                  <span>Delivery{selectedZone ? ` (${selectedZone.name})` : ''}</span>
+                  {selectedZone && deliveryCharge > 0
+                    ? <span className="font-medium text-ink-primary">{formatPrice(deliveryCharge)}</span>
+                    : zones.length > 0 && !selectedZone
+                      ? <span className="text-ink-muted">Choose your area</span>
+                      : <span className="text-green-600 font-medium">Free</span>}
                 </div>
               </div>
 
@@ -603,6 +660,38 @@ export default function CheckoutPage() {
               />
             ) : (
               <div className="space-y-3">
+                {bkashAuto && (
+                <button
+                  onClick={() => processPayment('bkash_auto')}
+                  disabled={loading}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border border-surface-300 hover:border-brand-600 hover:bg-brand-50/40 transition-colors text-left disabled:opacity-50"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-surface-100 flex items-center justify-center shrink-0">
+                    <Smartphone size={20} className="text-ink-primary" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-ink-primary">Pay with bKash</p>
+                    <p className="text-xs text-ink-muted">Pay instantly — confirmed automatically</p>
+                  </div>
+                </button>
+                )}
+
+                {nagadAuto && (
+                <button
+                  onClick={() => processPayment('nagad_auto')}
+                  disabled={loading}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border border-surface-300 hover:border-brand-600 hover:bg-brand-50/40 transition-colors text-left disabled:opacity-50"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-surface-100 flex items-center justify-center shrink-0">
+                    <Smartphone size={20} className="text-ink-primary" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-ink-primary">Pay with Nagad</p>
+                    <p className="text-xs text-ink-muted">Pay instantly — confirmed automatically</p>
+                  </div>
+                </button>
+                )}
+
                 {codEnabled && (
                 <button
                   onClick={() => processPayment('cod')}
@@ -667,7 +756,7 @@ export default function CheckoutPage() {
                   </button>
                 )}
 
-                {!codEnabled && !bkash && !nagad && !cryptoEnabled && (
+                {!codEnabled && !bkash && !nagad && !bkashAuto && !nagadAuto && !cryptoEnabled && (
                   <p className="text-sm text-ink-secondary text-center py-4">
                     This store hasn&apos;t turned on a payment method yet. Please contact the store.
                   </p>

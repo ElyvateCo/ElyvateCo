@@ -113,7 +113,7 @@ export default function OnboardingWizard({ initial }: { initial: OnboardingIniti
     // Skipping still marks setup as finished so they aren't asked again
     const ok = await save({ completed: true })
     setBusy(false)
-    if (ok) goAdmin('/admin')
+    if (ok) goAdmin('/go-admin')
   }
 
   // ── Done screen ─────────────────────────────────────────────────────────
@@ -130,10 +130,10 @@ export default function OnboardingWizard({ initial }: { initial: OnboardingIniti
             Next step: add your first product so customers have something to buy.
           </p>
           <div className="space-y-3">
-            <button className="btn-primary w-full" onClick={() => goAdmin('/admin/products')}>
+            <button className="btn-primary w-full" onClick={() => goAdmin('/go-admin?to=products')}>
               Add my first product
             </button>
-            <button className="btn-outline w-full" onClick={() => goAdmin('/admin')}>
+            <button className="btn-outline w-full" onClick={() => goAdmin('/go-admin')}>
               Go to dashboard
             </button>
             {storeUrl && (
