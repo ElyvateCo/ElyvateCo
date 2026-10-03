@@ -1,3 +1,4 @@
+import { formatPrice } from '@/lib/money'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Star } from 'lucide-react'
@@ -33,7 +34,7 @@ export default function ProductCardCompact({ product }: { product: Product }) {
       </h3>
 
       <div className="flex items-center justify-between">
-        <span className="text-sm font-bold text-ink-primary">${product.price.toFixed(2)}</span>
+        <span className="text-sm font-bold text-ink-primary">{formatPrice(product.price)}</span>
         {product.review_count > 0 && (
           <span className="flex items-center gap-1 text-xs text-ink-muted">
             <Star size={11} className="text-amber-400 fill-amber-400" />

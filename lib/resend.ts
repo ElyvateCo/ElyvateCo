@@ -1,3 +1,4 @@
+import { formatPrice } from '@/lib/money'
 import { Resend } from 'resend'
 import { Order, supabaseAdmin } from './supabase'
 import { THEME_PRESETS, DEFAULT_THEME_PRESET, isThemePresetKey, isValidHex } from './themePresets'
@@ -81,7 +82,7 @@ export async function sendAdminOrderNotification(order: Order) {
           </tr>
           <tr>
             <td style="padding:10px; font-weight:bold;">Total Paid</td>
-            <td style="padding:10px;">$${order.total_price.toFixed(2)}</td>
+            <td style="padding:10px;">${formatPrice(order.total_price)}</td>
           </tr>
           <tr style="background:#f5f5f5;">
             <td style="padding:10px; font-weight:bold;">Payment Method</td>
@@ -174,7 +175,7 @@ export async function sendCustomerConfirmation(order: Order) {
           </tr>
           <tr>
             <td style="padding:10px; font-weight:bold;">Total</td>
-            <td style="padding:10px;">$${order.total_price.toFixed(2)}</td>
+            <td style="padding:10px;">${formatPrice(order.total_price)}</td>
           </tr>
         </table>
 
@@ -217,14 +218,14 @@ export async function sendCheckoutIntentNotification(payload: CheckoutIntentPayl
   const itemsHtml = payload.items.map(i => `
     <tr style="border-bottom:1px solid #eee;">
       <td style="padding:8px 0;">${i.name} × ${i.quantity}</td>
-      <td style="padding:8px 0; text-align:right;">$${(i.price * i.quantity).toFixed(2)}</td>
+      <td style="padding:8px 0; text-align:right;">${formatPrice((i.price * i.quantity))}</td>
     </tr>
   `).join('')
 
   const { data, error } = await resend.emails.send({
     from: fromEmail,
     to: adminEmail,
-    subject: `👀 Someone is checking out right now — $${payload.total.toFixed(2)}`,
+    subject: `👀 Someone is checking out right now — ${formatPrice(payload.total)}`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: ${brandColor};">🔥 Live Checkout Started</h2>
@@ -234,7 +235,7 @@ export async function sendCheckoutIntentNotification(payload: CheckoutIntentPayl
           ${itemsHtml}
           <tr>
             <td style="padding:10px 0; font-weight:bold;">Total</td>
-            <td style="padding:10px 0; text-align:right; font-weight:bold;">$${payload.total.toFixed(2)}</td>
+            <td style="padding:10px 0; text-align:right; font-weight:bold;">${formatPrice(payload.total)}</td>
           </tr>
         </table>
 

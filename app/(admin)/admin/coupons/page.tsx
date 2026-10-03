@@ -1,4 +1,5 @@
 'use client'
+import { formatPrice } from '@/lib/money'
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, X, Tag, ToggleLeft, ToggleRight, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -165,10 +166,10 @@ export default function AdminCoupons() {
                         </div>
                       </td>
                       <td className="px-5 py-4 font-semibold text-ink-primary">
-                        {c.type === 'percentage' ? `${c.value}% off` : `$${c.value.toFixed(2)} off`}
+                        {c.type === 'percentage' ? `${c.value}% off` : `${formatPrice(c.value)} off`}
                       </td>
                       <td className="px-5 py-4 text-ink-secondary">
-                        {c.min_order > 0 ? `$${c.min_order.toFixed(2)}` : '—'}
+                        {c.min_order > 0 ? `${formatPrice(c.min_order)}` : '—'}
                       </td>
                       <td className="px-5 py-4 text-ink-secondary">
                         {c.usage_count}
@@ -322,9 +323,9 @@ export default function AdminCoupons() {
                   <p className="text-sm text-brand-800">
                     Code <span className="font-mono font-bold">{form.code}</span> gives{' '}
                     <span className="font-bold">
-                      {form.type === 'percentage' ? `${form.value}% off` : `$${parseFloat(form.value || '0').toFixed(2)} off`}
+                      {form.type === 'percentage' ? `${form.value}% off` : `${formatPrice(parseFloat(form.value || '0'))} off`}
                     </span>
-                    {form.min_order ? ` on orders over $${parseFloat(form.min_order).toFixed(2)}` : ''}
+                    {form.min_order ? ` on orders over ${formatPrice(parseFloat(form.min_order))}` : ''}
                     {form.usage_limit ? ` · ${form.usage_limit} uses max` : ' · unlimited uses'}
                     {form.expires_at ? ` · expires ${new Date(form.expires_at).toLocaleDateString()}` : ' · never expires'}
                   </p>

@@ -1,7 +1,8 @@
+import { formatPrice } from '@/lib/money'
 import { supabaseAdmin } from '@/lib/supabase'
 import { redirect } from 'next/navigation'
 import { getOwnedStore } from '@/lib/ownedStore'
-import { ShoppingBag, DollarSign, Package, TrendingUp } from 'lucide-react'
+import { ShoppingBag, Banknote, Package, TrendingUp } from 'lucide-react'
 
 export const revalidate = 0
 
@@ -30,10 +31,10 @@ export default async function AdminDashboard() {
   const [stats, orders] = await Promise.all([getStats(store.id), getRecentOrders(store.id)])
 
   const cards = [
-    { label: 'Total Revenue',  value: `$${stats.totalRevenue.toFixed(2)}`, icon: DollarSign,  color: 'text-green-600',  bg: 'bg-green-50' },
+    { label: 'Total Revenue',  value: `${formatPrice(stats.totalRevenue)}`, icon: Banknote,  color: 'text-green-600',  bg: 'bg-green-50' },
     { label: 'Total Orders',   value: stats.orders,                         icon: ShoppingBag, color: 'text-brand-600',  bg: 'bg-brand-50' },
     { label: 'Products',       value: stats.products,                       icon: Package,     color: 'text-purple-600', bg: 'bg-purple-50' },
-    { label: 'Avg Order Value',value: stats.orders ? `$${(stats.totalRevenue / stats.orders).toFixed(2)}` : '$0', icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Avg Order Value',value: stats.orders ? `${formatPrice((stats.totalRevenue / stats.orders))}` : '৳0', icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
   ]
 
   return (
@@ -79,7 +80,7 @@ export default async function AdminDashboard() {
                       <p className="text-ink-muted text-xs">{o.customer_email}</p>
                     </td>
                     <td className="px-5 py-3 max-w-[200px] truncate">{o.product_name}</td>
-                    <td className="px-5 py-3 font-semibold">${o.total_price.toFixed(2)}</td>
+                    <td className="px-5 py-3 font-semibold">{formatPrice(o.total_price)}</td>
                     <td className="px-5 py-3">
                       <span className={`px-2.5 py-1 rounded-xl text-xs font-medium capitalize ${
                         o.order_status === 'delivered' ? 'bg-green-100 text-green-700' :

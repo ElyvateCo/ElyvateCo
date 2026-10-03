@@ -1,4 +1,5 @@
 'use client'
+import { formatPrice } from '@/lib/money'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -69,7 +70,7 @@ export default function CartPage() {
                       <Link href={`/products/${item.slug}`} className="font-semibold text-sm text-ink-primary hover:text-brand-600 break-words [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">
                         {item.name}
                       </Link>
-                      <p className="text-brand-600 font-bold mt-1">${item.price.toFixed(2)}</p>
+                      <p className="text-brand-600 font-bold mt-1">{formatPrice(item.price)}</p>
                     </div>
                     {/* Qty + delete sit inline on desktop only */}
                     <div className="hidden sm:flex items-center border border-surface-300 rounded-xl overflow-hidden shrink-0">
@@ -104,7 +105,7 @@ export default function CartPage() {
                 {items.map(item => (
                   <div key={item.id} className="flex justify-between text-sm">
                     <span className="text-ink-secondary truncate mr-2">{item.name} × {item.quantity}</span>
-                    <span className="font-medium shrink-0">${(item.price * item.quantity).toFixed(2)}</span>
+                    <span className="font-medium shrink-0">{formatPrice((item.price * item.quantity))}</span>
                   </div>
                 ))}
                 <div className="flex justify-between text-sm text-ink-secondary">
@@ -115,7 +116,7 @@ export default function CartPage() {
               <div className="border-t border-surface-200 pt-4 mb-6">
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total</span>
-                  <span>${total().toFixed(2)}</span>
+                  <span>{formatPrice(total())}</span>
                 </div>
               </div>
               <button

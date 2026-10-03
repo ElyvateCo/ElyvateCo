@@ -3,12 +3,14 @@ import { useState, useEffect, useRef } from 'react'
 import { useCart } from '@/lib/cartStore'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { ShieldCheck, Lock, Tag, X, CheckCircle2, CreditCard, Coins, Copy, Check, Mail } from 'lucide-react'
+import { ShieldCheck, Lock, Tag, X, CheckCircle2, Coins, Copy, Check, Mail, Banknote, Smartphone } from 'lucide-react'
 import { useEmojiBurst } from '@/lib/useEmojiBurst'
 import { supabase } from '@/lib/supabase'
 import { useStoreId } from '@/lib/storeContext'
 import { rememberOrder } from '@/lib/myOrders'
 import Loader from '@/components/ui/loader'
+import { normalizeBDPhone } from '@/lib/phone'
+import { formatPrice } from '@/lib/money'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +26,25 @@ type CouponState = {
   discountAmount: number
   finalTotal: number
 } | null
+
+type PayMethod = 'cod' | 'bkash_manual' | 'nagad_manual' | 'crypto_usdt'
+
+type AccountType = 'personal' | 'agent' | 'merchant'
+
+type ManualPaymentInfo = {
+  provider: 'bkash' | 'nagad'
+  number: string
+  accountType: AccountType
+  amount: number
+  reference: string
+}
+
+// What the customer taps in their bKash / Nagad app for each account type
+const SEND_ACTION: Record<AccountType, string> = {
+  personal: 'Send Money',
+  agent: 'Cash Out',
+  merchant: 'Payment',
+}
 
 type CryptoPaymentInfo = {
   currency: string
@@ -41,7 +62,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState<FormData>({
     name: '', email: '', phone: '',
-    address: '', city: '', country: '', zip: '',
+    address: '', city: '', country: 'Bangladesh', zip: '',
   })
   const submitBtnRef = useRef<HTMLButtonElement>(null)
   const { burst, layer: emojiLayer } = useEmojiBurst()
@@ -54,22 +75,42 @@ export default function CheckoutPage() {
   // Payment method modal + crypto flow
   const [showMethodModal, setShowMethodModal] = useState(false)
   const [cryptoEnabled, setCryptoEnabled] = useState(false)
+  const [codEnabled, setCodEnabled] = useState(true)
+  const [bkash, setBkash] = useState<{ number: string; type: AccountType } | null>(null)
+  const [nagad, setNagad] = useState<{ number: string; type: AccountType } | null>(null)
   const [cryptoResult, setCryptoResult] = useState<CryptoPaymentInfo | null>(null)
   const [copied, setCopied] = useState(false)
 
+  // bKash / Nagad manual payment: instructions screen + Transaction ID form
+  const [manualResult, setManualResult] = useState<ManualPaymentInfo | null>(null)
+  const [manualOrderId, setManualOrderId] = useState<string | null>(null)
+  const [trxId, setTrxId] = useState('')
+  const [senderNumber, setSenderNumber] = useState('')
+  const [proofSending, setProofSending] = useState(false)
+  const [proofSent, setProofSent] = useState(false)
+
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => {
-    if (mounted && items.length === 0 && !cryptoResult) router.push('/cart')
-  }, [mounted, items.length, router, cryptoResult])
+    if (mounted && items.length === 0 && !cryptoResult && !manualResult) router.push('/cart')
+  }, [mounted, items.length, router, cryptoResult, manualResult])
 
   useEffect(() => {
     if (!storeId) return
-    supabase.from('site_settings').select('crypto_usdt_enabled').eq('store_id', storeId).maybeSingle().then(({ data }) => {
-      setCryptoEnabled(!!data?.crypto_usdt_enabled)
-    })
+    supabase
+      .from('site_settings')
+      .select('crypto_usdt_enabled, cod_enabled, bkash_enabled, bkash_number, bkash_type, nagad_enabled, nagad_number, nagad_type')
+      .eq('store_id', storeId)
+      .maybeSingle()
+      .then(({ data }) => {
+        setCryptoEnabled(!!data?.crypto_usdt_enabled)
+        // A store that hasn't configured anything yet accepts cash on delivery
+        setCodEnabled(data ? data.cod_enabled !== false : true)
+        setBkash(data?.bkash_enabled && data.bkash_number ? { number: data.bkash_number, type: (data.bkash_type || 'personal') as AccountType } : null)
+        setNagad(data?.nagad_enabled && data.nagad_number ? { number: data.nagad_number, type: (data.nagad_type || 'personal') as AccountType } : null)
+      })
   }, [storeId])
 
-  if (!mounted || (items.length === 0 && !cryptoResult)) {
+  if (!mounted || (items.length === 0 && !cryptoResult && !manualResult)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
@@ -98,7 +139,7 @@ export default function CheckoutPage() {
         return
       }
       setAppliedCoupon(data)
-      toast.success(`Coupon applied! You save $${data.discountAmount.toFixed(2)}`)
+      toast.success(`Coupon applied! You save ${formatPrice(data.discountAmount)}`)
     } catch {
       toast.error('Failed to apply coupon')
     } finally {
@@ -117,10 +158,14 @@ export default function CheckoutPage() {
     // Native HTML5 required-field validation already ran by the time a
     // submit event fires, so if we're here the form itself is valid —
     // now ask which payment method before actually creating the order.
+    if (!normalizeBDPhone(form.phone)) {
+      toast.error('Please enter a valid mobile number, like 01712345678')
+      return
+    }
     setShowMethodModal(true)
   }
 
-  async function processPayment(method: 'card' | 'crypto_usdt') {
+  async function processPayment(method: PayMethod) {
     setShowMethodModal(false)
 
     // Fire the celebration from wherever the actual submit button is, then
@@ -159,8 +204,15 @@ export default function CheckoutPage() {
         setCryptoResult(data.crypto)
         clearCart()
         setLoading(false)
+      } else if (method === 'cod') {
+        // Nothing to pay online — straight to the confirmation page
+        window.location.href = `/order-success?order=${data.orderId}&method=cod`
       } else {
-        window.location.href = data.paymentUrl
+        // bKash / Nagad: show where to send the money + the Transaction ID form
+        setManualResult(data.manual)
+        setManualOrderId(data.orderId)
+        clearCart()
+        setLoading(false)
       }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to create order')
@@ -185,6 +237,117 @@ export default function CheckoutPage() {
     }).catch(() => {
       toast.error('Copy not available here — press and hold the address to copy it manually.')
     })
+  }
+
+  function copyText(text: string) {
+    if (!navigator.clipboard) {
+      toast.error('Copy not available here — press and hold the number to copy it.')
+      return
+    }
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      toast.success('Copied!')
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => toast.error('Copy not available here — press and hold the number to copy it.'))
+  }
+
+  async function submitProof(e: React.FormEvent) {
+    e.preventDefault()
+    if (!manualOrderId) return
+    setProofSending(true)
+    try {
+      const res = await fetch('/api/checkout/payment-proof', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: manualOrderId, trxId, senderNumber }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not save your payment details')
+      setProofSent(true)
+      toast.success('Payment details received!')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Could not save your payment details')
+    } finally {
+      setProofSending(false)
+    }
+  }
+
+  // bKash / Nagad order created — show where to send the money.
+  if (manualResult) {
+    const label = manualResult.provider === 'bkash' ? 'bKash' : 'Nagad'
+    return (
+      <div className="section-pad pt-28 pb-20 min-h-screen bg-surface-50">
+        <div className="container-xl max-w-lg">
+          <div className="card p-6 sm:p-8">
+            <div className="text-center">
+              <div className="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center mx-auto mb-4">
+                <Smartphone size={26} className="text-brand-600" />
+              </div>
+              <h1 className="font-display text-2xl font-semibold mb-2">Pay with {label}</h1>
+              <p className="text-sm text-ink-secondary mb-6">
+                Your order is placed. Send the money in your {label} app, then enter the Transaction ID below so the store can confirm it.
+              </p>
+            </div>
+
+            <div className="bg-surface-50 rounded-2xl p-5 mb-5 space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1">Amount to send</p>
+                <p className="text-2xl font-bold text-ink-primary">{formatPrice(manualResult.amount)}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1">{label} number</p>
+                <div className="flex items-center gap-2 bg-white rounded-xl border border-surface-300 p-3">
+                  <code className="text-base font-semibold flex-1">{manualResult.number}</code>
+                  <button type="button" onClick={() => copyText(manualResult.number)} className="p-2 rounded-lg hover:bg-surface-100 text-ink-secondary shrink-0" aria-label="Copy number">
+                    {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
+                  </button>
+                </div>
+                <p className="text-xs text-ink-muted mt-1.5">In the app choose <strong>{SEND_ACTION[manualResult.accountType]}</strong>.</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-1">Your order reference</p>
+                <p className="font-mono font-semibold text-ink-primary">#{manualResult.reference}</p>
+                <p className="text-xs text-ink-muted mt-1">If the app asks for a reference, enter this.</p>
+              </div>
+            </div>
+
+            {proofSent ? (
+              <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex gap-3 mb-6">
+                <CheckCircle2 size={18} className="text-green-600 shrink-0 mt-0.5" />
+                <p className="text-sm text-green-800">
+                  Thank you! The store will check your payment and confirm your order soon. Keep your order reference <strong>#{manualResult.reference}</strong> to track it.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={submitProof} className="space-y-4 mb-6">
+                <div>
+                  <label className="label">Transaction ID (TrxID)</label>
+                  <input required className="input font-mono uppercase" placeholder="e.g. 8N7A6D5EE7" value={trxId}
+                    onChange={e => setTrxId(e.target.value.toUpperCase())} maxLength={20} autoComplete="off" />
+                  <p className="text-xs text-ink-muted mt-1">You get it in the {label} confirmation message after sending.</p>
+                </div>
+                <div>
+                  <label className="label">Number you sent from</label>
+                  <input required type="tel" inputMode="numeric" className="input" placeholder="01XXXXXXXXX" value={senderNumber}
+                    onChange={e => setSenderNumber(e.target.value)} />
+                </div>
+                <button type="submit" disabled={proofSending} className="btn-primary w-full flex items-center justify-center gap-2">
+                  {proofSending && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  {proofSending ? 'Sending…' : 'Submit payment details'}
+                </button>
+                <p className="text-xs text-ink-muted text-center">
+                  Haven&apos;t paid yet? You can come back to this later — the store will contact you on your phone.
+                </p>
+              </form>
+            )}
+
+            <button onClick={() => router.push('/')} className="btn-secondary w-full">
+              Return to Store
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // Crypto order created — show payment instructions instead of the form.
@@ -266,15 +429,16 @@ export default function CheckoutPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="label">Full Name</label>
-                    <input required className="input" placeholder="John Doe" value={form.name} onChange={update('name')} />
+                    <input required className="input" placeholder="Your full name" value={form.name} onChange={update('name')} />
                   </div>
                   <div>
-                    <label className="label">Email</label>
-                    <input required type="email" className="input" placeholder="john@email.com" value={form.email} onChange={update('email')} />
+                    <label className="label">Email <span className="text-ink-muted font-normal">(optional)</span></label>
+                    <input type="email" className="input" placeholder="you@email.com" value={form.email} onChange={update('email')} />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="label">Phone Number</label>
-                    <input required className="input" placeholder="+1 234 567 8900" value={form.phone} onChange={update('phone')} />
+                    <label className="label">Mobile Number</label>
+                    <input required type="tel" inputMode="numeric" className="input" placeholder="01XXXXXXXXX" value={form.phone} onChange={update('phone')} />
+                    <p className="text-xs text-ink-muted mt-1">The store will call or message you on this number.</p>
                   </div>
                 </div>
               </div>
@@ -284,32 +448,16 @@ export default function CheckoutPage() {
                 <h2 className="font-semibold text-lg mb-5">Shipping Address</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
-                    <label className="label">Street Address</label>
-                    <input required className="input" placeholder="123 Main St, Apt 4" value={form.address} onChange={update('address')} />
+                    <label className="label">Full Address</label>
+                    <input required className="input" placeholder="House, road, area" value={form.address} onChange={update('address')} />
                   </div>
                   <div>
-                    <label className="label">City</label>
-                    <input required className="input" placeholder="New York" value={form.city} onChange={update('city')} />
+                    <label className="label">District / City</label>
+                    <input required className="input" placeholder="e.g. Dhaka" value={form.city} onChange={update('city')} />
                   </div>
                   <div>
-                    <label className="label">ZIP / Postal Code</label>
-                    <input required className="input" placeholder="10001" value={form.zip} onChange={update('zip')} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="label">Country</label>
-                    <select required className="input" value={form.country} onChange={update('country')}>
-                      <option value="">Select country</option>
-                      <option value="US">United States</option>
-                      <option value="GB">United Kingdom</option>
-                      <option value="CA">Canada</option>
-                      <option value="AU">Australia</option>
-                      <option value="DE">Germany</option>
-                      <option value="FR">France</option>
-                      <option value="AE">UAE</option>
-                      <option value="SG">Singapore</option>
-                      <option value="IN">India</option>
-                      <option value="Other">Other</option>
-                    </select>
+                    <label className="label">Postal Code <span className="text-ink-muted font-normal">(optional)</span></label>
+                    <input className="input" placeholder="e.g. 1207" value={form.zip} onChange={update('zip')} />
                   </div>
                 </div>
               </div>
@@ -318,12 +466,13 @@ export default function CheckoutPage() {
               <div className="card p-6">
                 <div className="flex items-center gap-3 mb-3">
                   <Lock size={18} className="text-brand-600" />
-                  <h2 className="font-semibold text-lg">Secure Payment</h2>
+                  <h2 className="font-semibold text-lg">Payment</h2>
                 </div>
                 <p className="text-sm text-ink-secondary">
-                  {cryptoEnabled
-                    ? "You'll choose between card payment or USDT (crypto) on the next step."
-                    : "You'll be redirected to a secure payment page to complete your purchase. We accept all major credit/debit cards."}
+                  You&apos;ll choose how to pay on the next step
+                  {[codEnabled && 'Cash on Delivery', bkash && 'bKash', nagad && 'Nagad', cryptoEnabled && 'USDT'].filter(Boolean).length > 0
+                    ? ` — ${[codEnabled && 'Cash on Delivery', bkash && 'bKash', nagad && 'Nagad', cryptoEnabled && 'USDT'].filter(Boolean).join(', ')}.`
+                    : '.'}
                 </p>
               </div>
             </div>
@@ -337,7 +486,7 @@ export default function CheckoutPage() {
                 {items.map(item => (
                   <div key={item.id} className="flex justify-between text-sm">
                     <span className="text-ink-secondary truncate mr-2">{item.name} × {item.quantity}</span>
-                    <span className="font-medium shrink-0">${(item.price * item.quantity).toFixed(2)}</span>
+                    <span className="font-medium shrink-0">{formatPrice((item.price * item.quantity))}</span>
                   </div>
                 ))}
                 <div className="flex justify-between text-sm text-ink-secondary">
@@ -359,7 +508,7 @@ export default function CheckoutPage() {
                         <p className="text-xs text-green-700">
                           {appliedCoupon.type === 'percentage'
                             ? `${appliedCoupon.value}% off`
-                            : `$${appliedCoupon.value.toFixed(2)} off`}
+                            : `${formatPrice(appliedCoupon.value)} off`}
                         </p>
                       </div>
                     </div>
@@ -400,17 +549,17 @@ export default function CheckoutPage() {
               <div className="border-t border-surface-200 pt-4 mb-6 space-y-2">
                 <div className="flex justify-between text-sm text-ink-secondary">
                   <span>Subtotal</span>
-                  <span>${cartTotal.toFixed(2)}</span>
+                  <span>{formatPrice(cartTotal)}</span>
                 </div>
                 {appliedCoupon && (
                   <div className="flex justify-between text-sm text-green-600 font-medium">
                     <span>Discount</span>
-                    <span>−${appliedCoupon.discountAmount.toFixed(2)}</span>
+                    <span>−{formatPrice(appliedCoupon.discountAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-xl pt-1">
                   <span>Total</span>
-                  <span>${finalTotal.toFixed(2)}</span>
+                  <span>{formatPrice(finalTotal)}</span>
                 </div>
               </div>
 
@@ -420,12 +569,12 @@ export default function CheckoutPage() {
                 ) : (
                   <>
                     <ShieldCheck size={16} />
-                    Pay ${finalTotal.toFixed(2)}
+                    Place order · {formatPrice(finalTotal)}
                   </>
                 )}
               </button>
               <p className="text-xs text-ink-muted text-center mt-3">
-                Secured by 2Checkout · SSL encrypted
+                Your details are sent over a secure (SSL) connection
               </p>
             </div>
           </div>
@@ -454,19 +603,53 @@ export default function CheckoutPage() {
               />
             ) : (
               <div className="space-y-3">
+                {codEnabled && (
                 <button
-                  onClick={() => processPayment('card')}
+                  onClick={() => processPayment('cod')}
                   disabled={loading}
                   className="w-full flex items-center gap-4 p-4 rounded-2xl border border-surface-300 hover:border-brand-600 hover:bg-brand-50/40 transition-colors text-left disabled:opacity-50"
                 >
                   <div className="w-11 h-11 rounded-xl bg-surface-100 flex items-center justify-center shrink-0">
-                    <CreditCard size={20} className="text-ink-primary" />
+                    <Banknote size={20} className="text-ink-primary" />
                   </div>
                   <div>
-                    <p className="font-semibold text-sm text-ink-primary">Card Payment</p>
-                    <p className="text-xs text-ink-muted">Credit or debit card</p>
+                    <p className="font-semibold text-sm text-ink-primary">Cash on Delivery</p>
+                    <p className="text-xs text-ink-muted">Pay in cash when your order arrives</p>
                   </div>
                 </button>
+                )}
+
+                {bkash && (
+                <button
+                  onClick={() => processPayment('bkash_manual')}
+                  disabled={loading}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border border-surface-300 hover:border-brand-600 hover:bg-brand-50/40 transition-colors text-left disabled:opacity-50"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-surface-100 flex items-center justify-center shrink-0">
+                    <Smartphone size={20} className="text-ink-primary" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-ink-primary">bKash</p>
+                    <p className="text-xs text-ink-muted">Send money, then enter the TrxID</p>
+                  </div>
+                </button>
+                )}
+
+                {nagad && (
+                <button
+                  onClick={() => processPayment('nagad_manual')}
+                  disabled={loading}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border border-surface-300 hover:border-brand-600 hover:bg-brand-50/40 transition-colors text-left disabled:opacity-50"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-surface-100 flex items-center justify-center shrink-0">
+                    <Smartphone size={20} className="text-ink-primary" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-ink-primary">Nagad</p>
+                    <p className="text-xs text-ink-muted">Send money, then enter the TrxID</p>
+                  </div>
+                </button>
+                )}
 
                 {cryptoEnabled && (
                   <button
@@ -482,6 +665,12 @@ export default function CheckoutPage() {
                       <p className="text-xs text-ink-muted">Crypto — manual verification</p>
                     </div>
                   </button>
+                )}
+
+                {!codEnabled && !bkash && !nagad && !cryptoEnabled && (
+                  <p className="text-sm text-ink-secondary text-center py-4">
+                    This store hasn&apos;t turned on a payment method yet. Please contact the store.
+                  </p>
                 )}
               </div>
             )}

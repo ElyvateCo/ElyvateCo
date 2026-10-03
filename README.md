@@ -13,7 +13,7 @@ cp .env.local.example .env.local
 
 ## 3. Supabase Setup
 1. Go to your Supabase project → SQL Editor → New Query
-2. Run `supabase-schema.sql`, then `supabase-migration-multitenant.sql` (compare with your live schema first)
+2. Run `supabase-schema.sql`, then `supabase-migration-multitenant.sql` (compare with your live schema first), then `supabase-migration-bd-payments.sql` (Cash on Delivery, bKash, Nagad)
 
 ## 4. Get Your Supabase Keys
 - Project URL → Settings → API → Project URL

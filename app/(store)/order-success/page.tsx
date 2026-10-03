@@ -13,6 +13,7 @@ function OrderSuccessContent() {
   const searchParams  = useSearchParams()
   const orderId       = searchParams.get('order')
   const shortId       = orderId ? orderId.slice(0, 8).toUpperCase() : null
+  const isCod         = searchParams.get('method') === 'cod'
 
   useEffect(() => {
     clearCart()
@@ -36,7 +37,9 @@ function OrderSuccessContent() {
         </div>
       )}
       <p className="text-ink-secondary leading-relaxed mb-8">
-        Thank you for your purchase! A confirmation email has been sent to you. Your order will be processed within 1–3 business days.
+        {isCod
+          ? 'Thank you! Your order is placed. Please keep the order amount ready in cash — you will pay when it is delivered. The store will contact you on your phone to confirm.'
+          : 'Thank you! Your order is placed and the store will contact you on your phone to confirm.'}
       </p>
       <div className="flex flex-col gap-3">
         <Link href="/track-order" className="btn-primary flex items-center justify-center gap-2">
@@ -45,7 +48,7 @@ function OrderSuccessContent() {
         <Link href="/products" className="btn-secondary">Continue Shopping</Link>
       </div>
       <div className="flex items-center justify-center gap-2 mt-8 text-xs text-ink-muted">
-        <Mail size={13} /> Confirmation sent to your email
+        <Mail size={13} /> Track your order any time with your Order ID and phone number
       </div>
     </div>
   )

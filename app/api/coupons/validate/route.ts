@@ -1,3 +1,4 @@
+import { formatPrice } from '@/lib/money'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit, getIP, limits } from '@/lib/rateLimit'
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
     // Check minimum order
     if (coupon.min_order && cartTotal < coupon.min_order) {
       return NextResponse.json({
-        error: `Minimum order of $${coupon.min_order.toFixed(2)} required for this coupon`,
+        error: `Minimum order of ${formatPrice(coupon.min_order)} required for this coupon`,
       }, { status: 400 })
     }
 

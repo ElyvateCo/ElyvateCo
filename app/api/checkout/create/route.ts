@@ -3,6 +3,10 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { sendAdminOrderNotification, sendCustomerConfirmation } from '@/lib/resend'
 import { getCurrentStore } from '@/lib/currentStore'
 import { rateLimit, getIP, limits } from '@/lib/rateLimit'
+import { normalizeBDPhone } from '@/lib/phone'
+
+const PAYMENT_METHODS = ['cod', 'bkash_manual', 'nagad_manual', 'crypto_usdt'] as const
+type PaymentMethod = typeof PAYMENT_METHODS[number]
 
 function sanitize(input: unknown): string {
   if (typeof input !== 'string') return ''
@@ -26,25 +30,33 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { items, couponCode } = body
-    const paymentMethod: 'card' | 'crypto_usdt' = body.paymentMethod === 'crypto_usdt' ? 'crypto_usdt' : 'card'
+    const paymentMethod = PAYMENT_METHODS.find(m => m === body.paymentMethod) as PaymentMethod | undefined
+    if (!paymentMethod) {
+      return NextResponse.json({ error: 'Please choose a payment method' }, { status: 400 })
+    }
     // NOTE: total and discountAmount are intentionally NOT destructured from
     // the client here anymore — see the critical fix below.
 
     const form = {
       name:    sanitize(body.form?.name),
       email:   sanitize(body.form?.email),
-      phone:   sanitize(body.form?.phone),
+      phone:   normalizeBDPhone(sanitize(body.form?.phone)) ?? '',
       address: sanitize(body.form?.address),
       city:    sanitize(body.form?.city),
-      country: sanitize(body.form?.country),
+      country: sanitize(body.form?.country) || 'Bangladesh',
       zip:     sanitize(body.form?.zip),
     }
 
-    if (!form.name || !form.email || !form.address || !Array.isArray(items) || items.length === 0) {
+    // Phone number is how the store reaches the customer (Bangladesh is
+    // phone-first); email is optional.
+    if (!form.name || !form.address || !form.city || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
+    if (!form.phone) {
+      return NextResponse.json({ error: 'Please enter a valid mobile number, like 01712345678' }, { status: 400 })
+    }
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailPattern.test(form.email)) {
+    if (form.email && !emailPattern.test(form.email)) {
       return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
     }
 
@@ -55,18 +67,34 @@ export async function POST(req: NextRequest) {
 
     const db = supabaseAdmin()
 
-    // If crypto was requested, fetch the admin's configured USDT details
-    // up front and reject before doing any other work if it isn't actually
-    // enabled/configured — prevents an order being created for a payment
-    // method that has nowhere for the customer to actually send funds to.
-    let cryptoConfig: { address: string; network: string } | null = null
-    if (paymentMethod === 'crypto_usdt') {
-      const { data: settings } = await db
-        .from('site_settings')
-        .select('crypto_usdt_enabled, crypto_usdt_address, crypto_usdt_network')
-        .eq('store_id', store.id)
-        .maybeSingle()
+    // Only allow payment methods this store has actually switched on, and
+    // read the receiving numbers/addresses from the DATABASE — never from
+    // the request — so a customer can't point money at anyone else.
+    const { data: settings } = await db
+      .from('site_settings')
+      .select('cod_enabled, bkash_enabled, bkash_number, bkash_type, nagad_enabled, nagad_number, nagad_type, crypto_usdt_enabled, crypto_usdt_address, crypto_usdt_network')
+      .eq('store_id', store.id)
+      .maybeSingle()
 
+    let cryptoConfig: { address: string; network: string } | null = null
+    let manualWallet: { provider: 'bkash' | 'nagad'; number: string; accountType: string } | null = null
+
+    if (paymentMethod === 'cod') {
+      // A store with no settings yet accepts cash on delivery by default
+      if (settings && settings.cod_enabled === false) {
+        return NextResponse.json({ error: 'Cash on delivery is not available at this store' }, { status: 400 })
+      }
+    } else if (paymentMethod === 'bkash_manual') {
+      if (!settings?.bkash_enabled || !settings.bkash_number) {
+        return NextResponse.json({ error: 'bKash payment is not available at this store' }, { status: 400 })
+      }
+      manualWallet = { provider: 'bkash', number: settings.bkash_number, accountType: settings.bkash_type || 'personal' }
+    } else if (paymentMethod === 'nagad_manual') {
+      if (!settings?.nagad_enabled || !settings.nagad_number) {
+        return NextResponse.json({ error: 'Nagad payment is not available at this store' }, { status: 400 })
+      }
+      manualWallet = { provider: 'nagad', number: settings.nagad_number, accountType: settings.nagad_type || 'personal' }
+    } else if (paymentMethod === 'crypto_usdt') {
       if (!settings?.crypto_usdt_enabled || !settings.crypto_usdt_address) {
         return NextResponse.json({ error: 'Crypto payment is not currently available' }, { status: 400 })
       }
@@ -211,7 +239,8 @@ export async function POST(req: NextRequest) {
     try {
       await Promise.all([
         sendAdminOrderNotification(order),
-        sendCustomerConfirmation(order),
+        // Email is optional at checkout — only email customers who gave one
+        order.customer_email ? sendCustomerConfirmation(order) : Promise.resolve(),
       ])
     } catch (emailErr) {
       console.error('Order created but email failed to send:', emailErr)
@@ -230,28 +259,21 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const sellerId  = process.env.TWOCHECKOUT_SELLER_ID
-    // Send the customer back to THIS store's own address (already verified
-    // above via getCurrentStore), not one global URL.
-    const reqHost  = req.headers.get('x-forwarded-host') || req.headers.get('host')
-    const reqProto = req.headers.get('x-forwarded-proto') || 'https'
-    const appUrl    = reqHost ? `${reqProto}://${reqHost}` : process.env.NEXT_PUBLIC_APP_URL
-    const returnUrl = encodeURIComponent(`${appUrl}/order-success?order=${order.id}`)
-    const cancelUrl = encodeURIComponent(`${appUrl}/checkout`)
+    if (manualWallet) {
+      return NextResponse.json({
+        orderId: order.id,
+        manual: {
+          provider:    manualWallet.provider,
+          number:      manualWallet.number,
+          accountType: manualWallet.accountType,
+          amount:      finalTotal,
+          reference:   order.id.slice(0, 8).toUpperCase(),
+        },
+      })
+    }
 
-    const paymentUrl =
-      `https://secure.2checkout.com/order/checkout.php` +
-      `?PRODS=` + itemIds.join(',') +
-      `&QTY=` + lineItems.map(i => i.quantity).join(',') +
-      `&COUPON=&CART=1&CARD=1` +
-      `&BACK_REF=${returnUrl}` +
-      `&CANCEL_URL=${cancelUrl}` +
-      `&ORDERFLD_orderId=${order.id}` +
-      `&CURRENCY=USD` +
-      `&LANGUAGE=en` +
-      `&SID=${sellerId}`
-
-    return NextResponse.json({ paymentUrl, orderId: order.id })
+    // Cash on delivery — nothing more to do online
+    return NextResponse.json({ orderId: order.id, cod: true })
   } catch (err: unknown) {
     console.error('Checkout error:', err)
     return NextResponse.json(

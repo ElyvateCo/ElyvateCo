@@ -1,4 +1,5 @@
 'use client'
+import { formatPrice } from '@/lib/money'
 import { useEffect, useState, useRef } from 'react'
 import type { Product, Category } from '@/lib/supabase'
 import { isHttpsUrl, parseUrlList } from '@/lib/mediaLinks'
@@ -180,7 +181,7 @@ export default function AdminProducts() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3 font-semibold">${p.price.toFixed(2)}</td>
+                    <td className="px-5 py-3 font-semibold">{formatPrice(p.price)}</td>
                     <td className="px-5 py-3 text-ink-secondary capitalize">{p.category || '—'}</td>
                     <td className="px-5 py-3">
                       <span className={`px-2.5 py-1 rounded-xl text-xs font-medium ${p.stock_status === 'in_stock' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>

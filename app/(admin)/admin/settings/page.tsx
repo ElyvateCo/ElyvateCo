@@ -3,8 +3,63 @@ import { useEffect, useState } from 'react'
 import type { SiteSettings } from '@/lib/supabase'
 import { Check, Palette } from 'lucide-react'
 import { checkLink, parseCssSafeUrl } from '@/lib/mediaLinks'
+import { normalizeBDPhone } from '@/lib/phone'
 import { THEME_PRESETS, DEFAULT_THEME_PRESET, ThemePresetKey, generateColorScaleHex, isValidHex } from '@/lib/themePresets'
 import toast from 'react-hot-toast'
+
+type AccountType = 'personal' | 'agent' | 'merchant'
+
+function PayToggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={() => onChange(!on)}
+      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${on ? 'bg-brand-600' : 'bg-surface-300'}`}
+    >
+      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${on ? 'translate-x-5' : ''}`} />
+    </button>
+  )
+}
+
+function WalletSettings(props: {
+  label: string
+  on: boolean
+  number: string
+  type: AccountType
+  onOn: (v: boolean) => void
+  onNumber: (v: string) => void
+  onType: (v: AccountType) => void
+}) {
+  const { label, on, number, type, onOn, onNumber, onType } = props
+  return (
+    <div className="mb-5">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-ink-primary">{label}</p>
+          <p className="text-xs text-ink-muted">Customers send money to your {label} number, then enter the Transaction ID</p>
+        </div>
+        <PayToggle on={on} onChange={onOn} />
+      </div>
+      {on && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+          <div>
+            <label className="label">{label} number</label>
+            <input type="tel" inputMode="numeric" className="input" placeholder="01XXXXXXXXX" value={number} onChange={e => onNumber(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Account type</label>
+            <select className="input" value={type} onChange={e => onType(e.target.value as AccountType)}>
+              <option value="personal">Personal (Send Money)</option>
+              <option value="agent">Agent (Cash Out)</option>
+              <option value="merchant">Merchant (Payment)</option>
+            </select>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function AdminSettings() {
   const [settings, setSettings] = useState<Partial<SiteSettings>>({})
@@ -34,6 +89,8 @@ export default function AdminSettings() {
     if (!logo.ok) { toast.error(logo.error); return }
     const font = checkLink(settings.custom_font_url, 'Font link', { cssSafe: true })
     if (!font.ok) { toast.error(font.error + ' (no spaces, quotes or brackets)'); return }
+    if (settings.bkash_enabled && !normalizeBDPhone(settings.bkash_number ?? '')) { toast.error('Enter a valid bKash number, like 01712345678'); return }
+    if (settings.nagad_enabled && !normalizeBDPhone(settings.nagad_number ?? '')) { toast.error('Enter a valid Nagad number, like 01712345678'); return }
     setSaving(true)
     try {
       const res = await fetch('/api/admin/settings', {
@@ -238,6 +295,44 @@ export default function AdminSettings() {
           <p className="text-xs text-ink-muted">
             Changes your storefront's main accent color (buttons, links, highlights) everywhere.
             Status colors like order badges stay the same. Takes up to a minute to appear after saving.
+          </p>
+        </div>
+
+        {/* Payment methods (Bangladesh) */}
+        <div className="border-t border-surface-200 pt-6">
+          <p className="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-4">Payment Methods</p>
+
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div>
+              <p className="text-sm font-medium text-ink-primary">Cash on Delivery</p>
+              <p className="text-xs text-ink-muted">Customer pays in cash when the order arrives</p>
+            </div>
+            <PayToggle on={settings.cod_enabled !== false} onChange={v => setSettings(s => ({ ...s, cod_enabled: v }))} />
+          </div>
+
+          <WalletSettings
+            label="bKash"
+            on={!!settings.bkash_enabled}
+            number={settings.bkash_number ?? ''}
+            type={settings.bkash_type ?? 'personal'}
+            onOn={v => setSettings(s => ({ ...s, bkash_enabled: v }))}
+            onNumber={v => setSettings(s => ({ ...s, bkash_number: v }))}
+            onType={v => setSettings(s => ({ ...s, bkash_type: v }))}
+          />
+          <WalletSettings
+            label="Nagad"
+            on={!!settings.nagad_enabled}
+            number={settings.nagad_number ?? ''}
+            type={settings.nagad_type ?? 'personal'}
+            onOn={v => setSettings(s => ({ ...s, nagad_enabled: v }))}
+            onNumber={v => setSettings(s => ({ ...s, nagad_number: v }))}
+            onType={v => setSettings(s => ({ ...s, nagad_type: v }))}
+          />
+
+          <p className="text-xs text-ink-muted">
+            For bKash and Nagad you confirm each payment yourself: open{' '}
+            <a href="/admin/orders" className="text-brand-600 hover:underline">Orders</a>, compare the customer&apos;s
+            Transaction ID with your bKash/Nagad app, then mark the order as Paid. These numbers are shown to customers at checkout.
           </p>
         </div>
 

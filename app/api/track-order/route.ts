@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit, getIP, limits } from '@/lib/rateLimit'
 import { getCurrentStore } from '@/lib/currentStore'
+import { normalizeBDPhone } from '@/lib/phone'
 
 export async function GET(req: NextRequest) {
   // Rate limit — prevents brute-forcing order IDs to find other customers' data
@@ -12,9 +13,11 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const id    = searchParams.get('id')?.trim().slice(0, 40)
-  const email = searchParams.get('email')?.trim().toLowerCase().slice(0, 150)
+  // Customers identify themselves with the phone number (or email) they
+  // used at checkout. ?email= still works for old links.
+  const contact = (searchParams.get('contact') ?? searchParams.get('email'))?.trim().toLowerCase().slice(0, 150)
 
-  if (!id || !email) return NextResponse.json({ error: 'Missing id or email' }, { status: 400 })
+  if (!id || !contact) return NextResponse.json({ error: 'Missing order ID or phone number' }, { status: 400 })
 
   // Escape SQL LIKE wildcard characters (% and _) in user input before using
   // ilike. Without this, a request like ?email=%25&id=%25 would match ANY
@@ -23,7 +26,6 @@ export async function GET(req: NextRequest) {
   // character by default.
   const escapeLike = (s: string) => s.replace(/[\\%_]/g, ch => `\\${ch}`)
   const safeId    = escapeLike(id)
-  const safeEmail = escapeLike(email)
 
   const store = await getCurrentStore()
   if (!store) return NextResponse.json({ order: null }, { status: 404 })
@@ -33,7 +35,15 @@ export async function GET(req: NextRequest) {
   // Try full UUID first, then short ID prefix match
   let query = db.from('orders').select(
     'id,customer_name,product_name,quantity,total_price,order_status,payment_status,tracking_number,tracking_carrier,created_at,fulfilled_at,customer_address,customer_city,customer_country,customer_zip'
-  ).eq('store_id', store.id).ilike('customer_email', safeEmail)
+  ).eq('store_id', store.id)
+
+  if (contact.includes('@')) {
+    query = query.ilike('customer_email', escapeLike(contact))
+  } else {
+    const phone = normalizeBDPhone(contact)
+    if (!phone) return NextResponse.json({ order: null }, { status: 404 })
+    query = query.eq('customer_phone', phone)
+  }
 
   // If looks like short ID (8 chars), search by prefix
   const isShortId = id.length <= 8

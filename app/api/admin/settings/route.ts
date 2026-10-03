@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
 import { checkLink } from '@/lib/mediaLinks'
+import { normalizeBDPhone } from '@/lib/phone'
 
 export async function PUT(req: NextRequest) {
   const store = await getOwnedStore()
@@ -24,6 +25,26 @@ export async function PUT(req: NextRequest) {
     if (!r.ok) return NextResponse.json({ error: r.error + ' (no spaces, quotes or brackets)' }, { status: 400 })
     body.custom_font_url = r.value
     if (!r.value) body.custom_font_name = null
+  }
+
+  // bKash / Nagad receiving numbers: must be real Bangladeshi mobile numbers,
+  // and a wallet can't be switched on without one.
+  for (const [on, num, type, label] of [
+    ['bkash_enabled', 'bkash_number', 'bkash_type', 'bKash'],
+    ['nagad_enabled', 'nagad_number', 'nagad_type', 'Nagad'],
+  ] as const) {
+    if (num in body) {
+      const raw = typeof body[num] === 'string' ? body[num].trim() : ''
+      const clean = raw ? normalizeBDPhone(raw) : null
+      if (raw && !clean) {
+        return NextResponse.json({ error: `${label} number must be a valid Bangladeshi mobile number, like 01712345678` }, { status: 400 })
+      }
+      body[num] = clean
+    }
+    if (type in body && !['personal', 'agent', 'merchant'].includes(body[type])) body[type] = 'personal'
+    if (body[on] === true && !body[num]) {
+      return NextResponse.json({ error: `Add your ${label} number before turning ${label} on` }, { status: 400 })
+    }
   }
   const db = supabaseAdmin()
 

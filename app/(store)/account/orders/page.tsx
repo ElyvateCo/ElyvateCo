@@ -1,4 +1,5 @@
 'use client'
+import { formatPrice } from '@/lib/money'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -96,7 +97,7 @@ export default function OrderHistoryPage() {
                   </div>
                   <div className="text-right shrink-0 flex items-center gap-3">
                     <div>
-                      <p className="font-bold text-ink-primary">${o.total_price.toFixed(2)}</p>
+                      <p className="font-bold text-ink-primary">{formatPrice(o.total_price)}</p>
                       <p className="text-xs text-ink-muted">Qty: {o.quantity}</p>
                     </div>
                     {expanded === o.id ? <ChevronUp size={16} className="text-ink-muted" /> : <ChevronDown size={16} className="text-ink-muted" />}
@@ -120,17 +121,17 @@ export default function OrderHistoryPage() {
                       <div className="text-sm space-y-1">
                         <div className="flex justify-between text-ink-secondary">
                           <span>Subtotal</span>
-                          <span>${(o.total_price + (o.discount_amount ?? 0)).toFixed(2)}</span>
+                          <span>{formatPrice((o.total_price + (o.discount_amount ?? 0)))}</span>
                         </div>
                         {o.coupon_code && (
                           <div className="flex justify-between text-green-600">
                             <span>Coupon ({o.coupon_code})</span>
-                            <span>−${(o.discount_amount ?? 0).toFixed(2)}</span>
+                            <span>−{formatPrice((o.discount_amount ?? 0))}</span>
                           </div>
                         )}
                         <div className="flex justify-between font-bold text-ink-primary border-t border-surface-200 pt-1 mt-1">
                           <span>Total Paid</span>
-                          <span>${o.total_price.toFixed(2)}</span>
+                          <span>{formatPrice(o.total_price)}</span>
                         </div>
                       </div>
                     </div>

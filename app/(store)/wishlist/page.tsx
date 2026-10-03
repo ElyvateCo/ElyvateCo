@@ -1,4 +1,5 @@
 'use client'
+import { formatPrice } from '@/lib/money'
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -112,9 +113,9 @@ export default function WishlistPage() {
                 </Link>
 
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-base font-bold text-ink-primary">${item.price.toFixed(2)}</span>
+                  <span className="text-base font-bold text-ink-primary">{formatPrice(item.price)}</span>
                   {item.compare_price && (
-                    <span className="text-xs text-ink-muted line-through">${item.compare_price.toFixed(2)}</span>
+                    <span className="text-xs text-ink-muted line-through">{formatPrice(item.compare_price)}</span>
                   )}
                 </div>
 

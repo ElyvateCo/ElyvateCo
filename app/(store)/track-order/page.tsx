@@ -1,4 +1,5 @@
 'use client'
+import { formatPrice } from '@/lib/money'
 import { useState } from 'react'
 import { Search, Package, Truck, CheckCircle2, Clock, XCircle, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -47,7 +48,7 @@ export default function TrackOrderPage() {
     setOrder(null)
 
     try {
-      const res  = await fetch(`/api/track-order?id=${encodeURIComponent(orderId.trim())}&email=${encodeURIComponent(email.trim().toLowerCase())}`)
+      const res  = await fetch(`/api/track-order?id=${encodeURIComponent(orderId.trim())}&contact=${encodeURIComponent(email.trim().toLowerCase())}`)
       const data = await res.json()
       if (!res.ok || !data.order) { setNotFound(true) }
       else { setOrder(data.order) }
@@ -69,7 +70,7 @@ export default function TrackOrderPage() {
             <Package size={28} className="text-brand-600" />
           </div>
           <h1 className="font-display text-3xl font-semibold text-ink-primary mb-2">Track Your Order</h1>
-          <p className="text-ink-secondary text-sm">Enter your order ID and email address to see your order status.</p>
+          <p className="text-ink-secondary text-sm">Enter your order ID and the phone number you used at checkout to see your order status.</p>
         </div>
 
         {/* Form */}
@@ -84,15 +85,14 @@ export default function TrackOrderPage() {
                 value={orderId}
                 onChange={e => setOrderId(e.target.value)}
               />
-              <p className="text-xs text-ink-muted mt-1">Found in your confirmation email</p>
+              <p className="text-xs text-ink-muted mt-1">Shown after you placed the order (8 characters)</p>
             </div>
             <div>
-              <label className="label">Email Address</label>
+              <label className="label">Phone Number or Email</label>
               <input
                 required
-                type="email"
                 className="input"
-                placeholder="you@email.com"
+                placeholder="01XXXXXXXXX"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
               />
@@ -115,7 +115,7 @@ export default function TrackOrderPage() {
           <div className="card p-8 text-center border-red-100">
             <XCircle size={36} className="text-red-400 mx-auto mb-3" />
             <h3 className="font-semibold text-ink-primary mb-1">Order not found</h3>
-            <p className="text-sm text-ink-secondary">Please double-check your Order ID and email address. They must match exactly what you used at checkout.</p>
+            <p className="text-sm text-ink-secondary">Please double-check your Order ID and phone number. They must match exactly what you used at checkout.</p>
           </div>
         )}
 
@@ -149,7 +149,7 @@ export default function TrackOrderPage() {
                 </div>
                 <div>
                   <p className="text-ink-muted text-xs mb-0.5">Total Paid</p>
-                  <p className="font-bold text-ink-primary">${order.total_price.toFixed(2)}</p>
+                  <p className="font-bold text-ink-primary">{formatPrice(order.total_price)}</p>
                 </div>
                 <div>
                   <p className="text-ink-muted text-xs mb-0.5">Order Date</p>

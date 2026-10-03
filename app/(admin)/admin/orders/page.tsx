@@ -1,4 +1,5 @@
 'use client'
+import { formatPrice } from '@/lib/money'
 import { useEffect, useState } from 'react'
 import type { Order } from '@/lib/supabase'
 import { Package, Truck, CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp, Copy, ExternalLink } from 'lucide-react'
@@ -25,6 +26,14 @@ const statusIcon = (s: string) => {
 }
 
 type FulfillForm = { tracking_number: string; tracking_carrier: string; supplier_order_id: string; notes: string }
+
+const METHOD_LABEL: Record<string, string> = {
+  cod: 'Cash on Delivery',
+  bkash_manual: 'bKash',
+  nagad_manual: 'Nagad',
+  crypto_usdt: 'USDT',
+  card: 'Card',
+}
 
 export default function AdminOrders() {
   const [orders, setOrders]     = useState<Order[]>([])
@@ -139,6 +148,14 @@ export default function AdminOrders() {
                           USDT{o.payment_status === 'pending' ? ' — verify manually' : ''}
                         </span>
                       )}
+                      {(o.payment_method === 'cod' || o.payment_method === 'bkash_manual' || o.payment_method === 'nagad_manual') && (
+                        <span className="px-2.5 py-0.5 rounded-xl text-xs font-medium bg-blue-100 text-blue-700">
+                          {METHOD_LABEL[o.payment_method]}
+                          {o.payment_status === 'pending' && o.payment_method !== 'cod'
+                            ? (o.payment_trx_id ? ' — verify TrxID' : ' — waiting for TrxID')
+                            : ''}
+                        </span>
+                      )}
                       {needsFulfillment && <span className="px-2 py-0.5 rounded-xl text-xs font-bold bg-amber-100 text-amber-700 animate-pulse">Needs Fulfillment</span>}
                     </div>
                     <p className="font-medium text-sm text-ink-primary truncate">{o.customer_name} — {o.product_name}</p>
@@ -146,7 +163,7 @@ export default function AdminOrders() {
                   </div>
                   <div className="text-right shrink-0 flex items-center gap-3">
                     <div>
-                      <p className="font-bold text-ink-primary">${o.total_price.toFixed(2)}</p>
+                      <p className="font-bold text-ink-primary">{formatPrice(o.total_price)}</p>
                       <p className="text-xs text-ink-muted">Qty: {o.quantity}</p>
                     </div>
                     {isOpen ? <ChevronUp size={16} className="text-ink-muted" /> : <ChevronDown size={16} className="text-ink-muted" />}
@@ -184,8 +201,24 @@ export default function AdminOrders() {
                         <div className="text-sm space-y-1">
                           <p className="text-ink-secondary">Product: <span className="text-ink-primary font-medium">{o.product_name}</span></p>
                           <p className="text-ink-secondary">Qty: <span className="text-ink-primary font-medium">{o.quantity}</span></p>
-                          <p className="text-ink-secondary">Total: <span className="text-ink-primary font-bold">${o.total_price.toFixed(2)}</span></p>
+                          <p className="text-ink-secondary">Total: <span className="text-ink-primary font-bold">{formatPrice(o.total_price)}</span></p>
                           {o.coupon_code && <p className="text-green-600 text-xs">Coupon: {o.coupon_code}</p>}
+                          {o.customer_phone && <p className="text-ink-secondary">Phone: <a href={`tel:${o.customer_phone}`} className="text-brand-600 font-medium">{o.customer_phone}</a></p>}
+                          {o.payment_method === 'cod' && (
+                            <div className="mt-2 p-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+                              <p className="text-blue-800 font-semibold text-xs mb-1">Cash on Delivery</p>
+                              <p className="text-blue-700 text-xs">Collect <strong>{formatPrice(o.total_price)}</strong> in cash when delivering, then mark the order as Paid.</p>
+                            </div>
+                          )}
+                          {(o.payment_method === 'bkash_manual' || o.payment_method === 'nagad_manual') && (
+                            <div className="mt-2 p-2.5 bg-pink-50 border border-pink-200 rounded-xl">
+                              <p className="text-pink-800 font-semibold text-xs mb-1">{METHOD_LABEL[o.payment_method]} payment</p>
+                              <p className="text-pink-700 text-xs">Expected: <strong>{formatPrice(o.total_price)}</strong></p>
+                              <p className="text-pink-700 text-xs">TrxID: <strong className="font-mono">{o.payment_trx_id || 'not submitted yet'}</strong></p>
+                              <p className="text-pink-700 text-xs">Sent from: <strong>{o.payment_sender_number || '—'}</strong></p>
+                              <p className="text-pink-700 text-xs mt-1">Check this TrxID and amount in your {METHOD_LABEL[o.payment_method]} app, then mark as Paid.</p>
+                            </div>
+                          )}
                           {o.payment_method === 'crypto_usdt' && (
                             <div className="mt-2 p-2.5 bg-purple-50 border border-purple-200 rounded-xl">
                               <p className="text-purple-800 font-semibold text-xs mb-1">USDT Payment</p>

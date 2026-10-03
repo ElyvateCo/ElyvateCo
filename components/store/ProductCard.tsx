@@ -1,4 +1,5 @@
 'use client'
+import { formatPrice } from '@/lib/money'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Star, ShoppingCart } from 'lucide-react'
@@ -56,11 +57,11 @@ export default function ProductCard({ product }: { product: Product }) {
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-2">
               <span className="text-base font-bold text-ink-primary">
-                ${product.price.toFixed(2)}
+                {formatPrice(product.price)}
               </span>
               {product.compare_price && (
                 <span className="text-xs text-ink-muted line-through">
-                  ${product.compare_price.toFixed(2)}
+                  {formatPrice(product.compare_price)}
                 </span>
               )}
             </div>

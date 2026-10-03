@@ -1,4 +1,5 @@
 'use client'
+import { formatPrice } from '@/lib/money'
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
@@ -259,8 +260,8 @@ export default function ProductPageClient({ slug, initialProduct }: { slug: stri
 
               {/* Price */}
               <div className="flex items-baseline gap-3 mb-2">
-                <span className="text-4xl font-bold text-ink-primary">${product.price.toFixed(2)}</span>
-                {product.compare_price && <span className="text-lg text-ink-muted line-through">${product.compare_price.toFixed(2)}</span>}
+                <span className="text-4xl font-bold text-ink-primary">{formatPrice(product.price)}</span>
+                {product.compare_price && <span className="text-lg text-ink-muted line-through">{formatPrice(product.compare_price)}</span>}
                 {discount > 0 && <span className="text-sm font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-xl">Save {discount}%</span>}
               </div>
 
@@ -415,7 +416,7 @@ export default function ProductPageClient({ slug, initialProduct }: { slug: stri
           )}
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-ink-primary truncate">{product.name}</p>
-            <p className="text-sm font-bold text-brand-600">${(product.price * qty).toFixed(2)}</p>
+            <p className="text-sm font-bold text-brand-600">{formatPrice((product.price * qty))}</p>
           </div>
           <button onClick={handleAddToCart} className={`w-11 h-11 shrink-0 flex items-center justify-center rounded-2xl border border-surface-300 transition-all ${added ? 'bg-green-100 border-green-300 text-green-700' : 'text-ink-primary'}`} aria-label="Add to cart">
             <ShoppingCart size={16} />
