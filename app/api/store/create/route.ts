@@ -37,16 +37,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'You already have a store on this account' }, { status: 400 })
   }
 
-  const { data: store, error: storeError } = await admin
+  const baseRow = { owner_user_id: user.id, store_name: storeName.trim(), subdomain: cleanSubdomain }
+  let { data: store, error: storeError } = await admin
     .from('stores')
-    .insert({
-      owner_user_id: user.id,
-      store_name: storeName.trim(),
-      subdomain: cleanSubdomain,
-      admin_path: 'admin',
-    })
+    .insert({ ...baseRow, admin_path: 'admin' })
     .select()
     .single()
+
+  // The admin_path column comes from a newer migration — if it isn't in the
+  // database yet, create the store without it rather than failing.
+  if (storeError && /admin_path/.test(storeError.message)) {
+    ;({ data: store, error: storeError } = await admin.from('stores').insert(baseRow).select().single())
+  }
 
   if (storeError) {
     const message = storeError.code === '23505'

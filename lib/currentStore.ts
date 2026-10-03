@@ -31,20 +31,30 @@ function getHost(): string {
 // hostname alone — never from anything the visitor can send in a request
 // body. Cached per request so a page with many components only hits the
 // database once.
-export const getCurrentStore = cache(async (): Promise<CurrentStore | null> => {
+const BASE_COLS = 'id, store_name, subdomain, custom_domain, plan'
+
+// Looks a store up by subdomain or custom domain. admin_path is a newer
+// column: if the database migration hasn't been run yet, retry without it so
+// the storefront keeps working instead of showing "Store not found".
+async function findStore(field: 'subdomain' | 'custom_domain', value: string): Promise<CurrentStore | null> {
   const db = supabaseAdmin()
-  const cols = 'id, store_name, subdomain, custom_domain, plan, admin_path'
+  const first = await db.from('stores').select(`${BASE_COLS}, admin_path`).eq(field, value).maybeSingle()
+  if (!first.error) return (first.data as CurrentStore | null) ?? null
+  const second = await db.from('stores').select(BASE_COLS).eq(field, value).maybeSingle()
+  return (second.data as CurrentStore | null) ?? null
+}
+
+export const getCurrentStore = cache(async (): Promise<CurrentStore | null> => {
 
   // TEMPORARY preview helper — see middleware.ts. Lets you test any store
   // via ?store=xyz on the shared vercel.app URL, before a real domain
   // with wildcard subdomains is connected.
   const previewSubdomain = headers().get('x-preview-store')
   if (previewSubdomain) {
-    const { data } = await db.from('stores').select(cols).eq('subdomain', previewSubdomain).maybeSingle()
     // A name that isn't a real store means "no such store" — NEVER quietly
     // fall back to the default store (that hid typos like "ely" vs "elyy"
     // and made it look like products were missing).
-    return (data as CurrentStore | null) ?? null
+    return findStore('subdomain', previewSubdomain)
   }
 
   const host = getHost()
@@ -70,12 +80,9 @@ export const getCurrentStore = cache(async (): Promise<CurrentStore | null> => {
     customDomain = host
   }
 
-  const query = db.from('stores').select(cols)
-  const { data } = subdomain
-    ? await query.eq('subdomain', subdomain).maybeSingle()
-    : await query.eq('custom_domain', customDomain!).maybeSingle()
-
-  return (data as CurrentStore | null) ?? null
+  return subdomain
+    ? findStore('subdomain', subdomain)
+    : findStore('custom_domain', customDomain!)
 })
 
 // For storefront pages: the store, or a 404 if this hostname doesn't

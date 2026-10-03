@@ -54,8 +54,9 @@ export default function MerchantSignupPage() {
 
     // 1. Make sure the store address is free BEFORE creating the account
     const check = await fetch(`/api/store/check-subdomain?subdomain=${encodeURIComponent(subdomain.trim())}`).then(r => r.json()).catch(() => null)
-    if (!check || !check.available) {
-      toast.error(check?.error || 'Could not check that store address')
+    // (If the check itself fails, carry on — the server checks again when the store is created)
+    if (check && check.available === false) {
+      toast.error(check.error || 'That store address is not available')
       setLoading(false)
       return
     }
@@ -67,7 +68,7 @@ export default function MerchantSignupPage() {
       password,
       options: {
         emailRedirectTo: confirmRedirect(),
-        data: { store_name: storeName.trim(), subdomain: check.subdomain },
+        data: { store_name: storeName.trim(), subdomain: (check?.subdomain as string | undefined) ?? subdomain.trim().toLowerCase() },
       },
     })
     if (error || !data.user) {

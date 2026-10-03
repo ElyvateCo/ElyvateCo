@@ -74,11 +74,16 @@ export async function POST(req: NextRequest) {
     // Only allow payment methods this store has actually switched on, and
     // read the receiving numbers/addresses from the DATABASE — never from
     // the request — so a customer can't point money at anyone else.
-    const { data: settings } = await db
+    const SETTINGS_COLS = 'cod_enabled, bkash_enabled, bkash_number, bkash_type, nagad_enabled, nagad_number, nagad_type, crypto_usdt_enabled, crypto_usdt_address, crypto_usdt_network'
+    let { data: settings, error: settingsError } = await db
       .from('site_settings')
-      .select('cod_enabled, bkash_enabled, bkash_number, bkash_type, nagad_enabled, nagad_number, nagad_type, bkash_auto_enabled, nagad_auto_enabled, crypto_usdt_enabled, crypto_usdt_address, crypto_usdt_network')
+      .select(`${SETTINGS_COLS}, bkash_auto_enabled, nagad_auto_enabled`)
       .eq('store_id', store.id)
       .maybeSingle()
+    if (settingsError) {
+      // Newer columns missing (migration not run yet) — fall back to the basics
+      ;({ data: settings } = await db.from('site_settings').select(SETTINGS_COLS).eq('store_id', store.id).maybeSingle())
+    }
 
     let cryptoConfig: { address: string; network: string } | null = null
     let manualWallet: { provider: 'bkash' | 'nagad'; number: string; accountType: string } | null = null
