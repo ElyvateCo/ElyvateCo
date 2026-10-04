@@ -1,5 +1,5 @@
 'use client'
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Mail, Lock, Loader2 } from 'lucide-react'
 import { supabaseMerchantBrowser } from '@/lib/supabase-merchant'
@@ -13,6 +13,18 @@ function LoginForm() {
   const [loading, setLoading]   = useState(false)
   const router = useRouter()
   const params = useSearchParams()
+
+  // An earlier setup scoped login cookies to ".<this-host>" (e.g.
+  // ".elyvateco.vercel.app"). Remove those leftovers so they can't shadow
+  // the normal cookies and make a correct login look like it failed.
+  useEffect(() => {
+    const host = window.location.hostname
+    if (!host.endsWith('.vercel.app')) return
+    document.cookie.split('; ').forEach(c => {
+      const name = c.split('=')[0]
+      if (name.startsWith('sb-')) document.cookie = `${name}=; Max-Age=0; Path=/; Domain=.${host}`
+    })
+  }, [])
   const rawRedirect = params.get('redirect') || '/go-admin'
   // Only ever redirect to a path on this site
   const redirect = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/go-admin'

@@ -1,3 +1,4 @@
+import { ROOT_DOMAIN } from './rootDomain'
 import { headers } from 'next/headers'
 
 // The public address of a store, for "View Store" buttons in the admin panel.
@@ -6,7 +7,7 @@ import { headers } from 'next/headers'
 // Vercel preview (no domain yet) -> /?store=myshop  (the preview cookie
 // in middleware.ts then keeps that store selected while you browse it)
 export function getPublicStoreUrl(subdomain: string): string {
-  const root = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || '').toLowerCase()
+  const root = ROOT_DOMAIN
   const h = headers()
   const rawHost = (h.get('x-forwarded-host') || h.get('host') || '').toLowerCase()
   const host = rawHost.split(':')[0]

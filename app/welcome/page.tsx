@@ -1,3 +1,4 @@
+import { ROOT_DOMAIN } from '@/lib/rootDomain'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import {
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
 // Preview-mode storefront link (see middleware.ts) — becomes a real
 // subdomain automatically once NEXT_PUBLIC_ROOT_DOMAIN is set.
 function storeLink(subdomain: string): string {
-  const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN
+  const root = ROOT_DOMAIN
   return root ? `https://${subdomain}.${root}` : `/?store=${subdomain}`
 }
 

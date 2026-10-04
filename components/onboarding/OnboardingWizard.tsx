@@ -1,4 +1,5 @@
 'use client'
+import { ROOT_DOMAIN as REAL_ROOT_DOMAIN } from '@/lib/rootDomain'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, Check, ArrowLeft, ArrowRight, ExternalLink } from 'lucide-react'
@@ -20,7 +21,7 @@ export type OnboardingInitial = {
 }
 
 const STEP_TITLES = ['About your store', 'Look & feel', 'Find you online']
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'elyvateco.com'
+const ROOT_DOMAIN = REAL_ROOT_DOMAIN || 'elyvateco.com'
 
 // Public address of the new store, for the "View my store" button
 function buildStoreUrl(subdomain: string): string {
@@ -28,7 +29,7 @@ function buildStoreUrl(subdomain: string): string {
   if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
     return `${protocol}//${subdomain}.localhost${port ? `:${port}` : ''}`
   }
-  if (process.env.NEXT_PUBLIC_ROOT_DOMAIN) return `https://${subdomain}.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`
+  if (REAL_ROOT_DOMAIN) return `https://${subdomain}.${REAL_ROOT_DOMAIN}`
   // No real domain connected yet — preview via query param instead
   return `${origin}/?store=${subdomain}`
 }

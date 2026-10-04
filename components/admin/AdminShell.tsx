@@ -15,11 +15,11 @@ type Props = {
   subdomain: string
   storeUrl: string      // where "View Store" goes
   storeLabel: string    // short address shown under the store name
-  adminPath: string     // this store's admin address, e.g. "admin"
+  adminPath?: string    // this store's admin address (defaults to "admin")
   children: React.ReactNode
 }
 
-export default function AdminShell({ storeName, subdomain, storeUrl, storeLabel, adminPath, children }: Props) {
+export default function AdminShell({ storeName, subdomain, storeUrl, storeLabel, adminPath = 'admin', children }: Props) {
   const router = useRouter()
   const path = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)

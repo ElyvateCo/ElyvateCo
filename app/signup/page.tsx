@@ -1,11 +1,12 @@
 'use client'
+import { ROOT_DOMAIN as REAL_ROOT_DOMAIN } from '@/lib/rootDomain'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mail, Lock, Store, Loader2 } from 'lucide-react'
 import { supabaseMerchantBrowser } from '@/lib/supabase-merchant'
 import toast from 'react-hot-toast'
 
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'elyvateco.com'
+const ROOT_DOMAIN = REAL_ROOT_DOMAIN || 'elyvateco.com'
 
 export default function MerchantSignupPage() {
   const [storeName, setStoreName] = useState('')

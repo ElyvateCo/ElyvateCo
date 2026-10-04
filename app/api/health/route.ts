@@ -1,3 +1,4 @@
+import { ROOT_DOMAIN } from '@/lib/rootDomain'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { secretBoxReady } from '@/lib/secretBox'
@@ -24,7 +25,7 @@ export async function GET() {
     SUPABASE_SERVICE_ROLE_KEY:     !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     PAYMENT_SECRET_KEY:            secretBoxReady(),
     RESEND_API_KEY:                !!process.env.RESEND_API_KEY,
-    NEXT_PUBLIC_ROOT_DOMAIN:       process.env.NEXT_PUBLIC_ROOT_DOMAIN || '(not set — fine until you connect a domain)',
+    NEXT_PUBLIC_ROOT_DOMAIN:       ROOT_DOMAIN || '(none — fine until you connect your own domain; a vercel.app value is ignored)',
   }
 
   const problems: string[] = []

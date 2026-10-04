@@ -1,3 +1,4 @@
+import { ROOT_DOMAIN } from '@/lib/rootDomain'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseMiddleware } from '@/lib/supabase-server'
 
@@ -6,7 +7,7 @@ import { supabaseMiddleware } from '@/lib/supabase-server'
 // (myshop.elyvate.com, myshop.localhost, shop.theirdomain.com) show stores.
 function isPlatformHost(req: NextRequest): boolean {
   const host = (req.headers.get('x-forwarded-host') || req.headers.get('host') || '').split(':')[0].toLowerCase()
-  const root = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || '').toLowerCase()
+  const root = ROOT_DOMAIN
   return (
     !host ||
     host === 'localhost' ||

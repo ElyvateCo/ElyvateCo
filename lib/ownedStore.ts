@@ -1,3 +1,4 @@
+import { ROOT_DOMAIN } from '@/lib/rootDomain'
 import { headers } from 'next/headers'
 import { supabaseServer } from './supabase-server'
 import { supabaseAdmin } from './supabase'
@@ -15,7 +16,6 @@ export type OwnedStore = {
   onboarding_completed?: boolean
 }
 
-const ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || '').toLowerCase()
 
 // Admin lives at <subdomain>.elyvateco.com/admin, so an owner must only be
 // able to use the admin on THEIR OWN store's host. Platform hosts (root

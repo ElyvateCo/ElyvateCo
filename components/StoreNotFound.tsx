@@ -1,9 +1,9 @@
 'use client'
+import { ROOT_DOMAIN } from '@/lib/rootDomain'
 import { useEffect, useState } from 'react'
 import { Store } from 'lucide-react'
 
 const PREVIEW_COOKIE = 'elyvate_preview_store'
-const ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || '').toLowerCase()
 
 // Works out which store address the visitor was trying to open, so the page
 // can say "There is no store called "mahin"". Only ever shown as plain text.

@@ -1,3 +1,4 @@
+import { ROOT_DOMAIN } from '@/lib/rootDomain'
 import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import { cache } from 'react'
@@ -14,7 +15,6 @@ export type CurrentStore = {
 
 // Set NEXT_PUBLIC_ROOT_DOMAIN to your platform's domain (e.g. "elyvate.com")
 // so "myshop.elyvate.com" resolves to the store with subdomain "myshop".
-const ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || '').toLowerCase()
 
 // Where the bare root domain / localhost / Vercel preview URLs land until
 // the platform landing page exists. Any subdomain that exists in the
