@@ -47,5 +47,23 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({ ok: problems.length === 0, problems, env, database })
+  // What Supabase Auth is set to (public endpoint, no secrets)
+  const auth: Record<string, string> = {}
+  try {
+    const r = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/settings`, {
+      headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' },
+      cache: 'no-store',
+    })
+    const a = await r.json()
+    auth.signupsAllowed = a.disable_signup ? 'NO — signups are switched off in Supabase' : 'yes'
+    auth.emailConfirmationRequired = a.mailer_autoconfirm ? 'no' : 'yes (Supabase\'s own email sender can only reach your team address)'
+    if (a.disable_signup) problems.push('Supabase: signups are disabled (Authentication → Sign In / Providers → "Allow new users to sign up")')
+  } catch {
+    auth.status = 'could not read Supabase Auth settings'
+  }
+  auth.signupMode = process.env.REQUIRE_EMAIL_CONFIRMATION === 'true'
+    ? 'email link required (REQUIRE_EMAIL_CONFIRMATION=true)'
+    : 'instant (account is confirmed by the server — no email needed)'
+
+  return NextResponse.json({ ok: problems.length === 0, problems, env, database, auth })
 }

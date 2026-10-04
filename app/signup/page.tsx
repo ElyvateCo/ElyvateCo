@@ -62,35 +62,57 @@ export default function MerchantSignupPage() {
       return
     }
 
-    // 2. Create the account. The store name/address ride along so they
-    //    survive the "confirm your email" step.
-    const { data, error } = await sb.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        emailRedirectTo: confirmRedirect(),
-        data: { store_name: storeName.trim(), subdomain: (check?.subdomain as string | undefined) ?? subdomain.trim().toLowerCase() },
-      },
-    })
-    if (error || !data.user) {
-      toast.error(friendlyAuthError(error?.message || 'Could not create account'))
-      setLoading(false)
-      return
-    }
-    // Supabase hides "this email already exists" by returning a user with no identities
-    if (data.user.identities && data.user.identities.length === 0) {
-      toast.error('An account with this email already exists. Please log in instead.')
+    // 2. Create the account. The server makes it already-confirmed (no email
+    //    needed) unless REQUIRE_EMAIL_CONFIRMATION=true is set in Vercel — then
+    //    we use the normal Supabase sign-up that emails a confirmation link.
+    const pre = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim(), password, storeName: storeName.trim(), subdomain: subdomain.trim() }),
+    }).then(async r => (await r.json()) as { mode?: string; error?: string }).catch(() => null)
+
+    if (pre?.error) {
+      toast.error(pre.error)
       setLoading(false)
       return
     }
 
-    // 3. Email confirmation is ON in Supabase: no session yet. The store is
-    //    created in onboarding right after they click the link in the email.
-    if (!data.session) {
-      setAwaitingEmail(true)
-      setResendWait(60)
-      setLoading(false)
-      return
+    if (pre?.mode === 'created') {
+      const { error: signInError } = await sb.auth.signInWithPassword({ email: email.trim(), password })
+      if (signInError) {
+        toast.error('Your account was created. Please log in to continue.')
+        setLoading(false)
+        router.push('/login')
+        return
+      }
+    } else {
+      const { data, error } = await sb.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          emailRedirectTo: confirmRedirect(),
+          data: { store_name: storeName.trim(), subdomain: (check?.subdomain as string | undefined) ?? subdomain.trim().toLowerCase() },
+        },
+      })
+      if (error || !data.user) {
+        toast.error(friendlyAuthError(error?.message || 'Could not create account'))
+        setLoading(false)
+        return
+      }
+      // Supabase hides "this email already exists" by returning a user with no identities
+      if (data.user.identities && data.user.identities.length === 0) {
+        toast.error('An account with this email already exists. Please log in instead.')
+        setLoading(false)
+        return
+      }
+      // Email confirmation is required: no session yet. The store is created in
+      // onboarding right after they click the link in the email.
+      if (!data.session) {
+        setAwaitingEmail(true)
+        setResendWait(60)
+        setLoading(false)
+        return
+      }
     }
 
     const res = await fetch('/api/store/create', {
@@ -182,7 +204,7 @@ export default function MerchantSignupPage() {
             <label className="label">Password</label>
             <div className="relative">
               <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-muted" />
-              <input required type="password" className="input pl-11" placeholder="••••••••" minLength={6}
+              <input required type="password" className="input pl-11" placeholder="••••••••" minLength={8}
                 value={password} onChange={e => setPassword(e.target.value)} />
             </div>
           </div>
