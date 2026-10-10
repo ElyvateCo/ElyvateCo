@@ -65,5 +65,6 @@ export async function GET() {
     ? 'email link required (REQUIRE_EMAIL_CONFIRMATION=true)'
     : 'instant (account is confirmed by the server — no email needed)'
 
-  return NextResponse.json({ ok: problems.length === 0, problems, env, database, auth })
+  const version = { build: 'server-signup-v3', commit: (process.env.VERCEL_GIT_COMMIT_SHA || 'unknown').slice(0, 7) }
+  return NextResponse.json({ version, ok: problems.length === 0, problems, env, database, auth })
 }

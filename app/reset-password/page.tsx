@@ -1,4 +1,5 @@
 'use client'
+import { withTimeout } from '@/lib/fetchJson'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Lock, Loader2 } from 'lucide-react'
@@ -19,7 +20,9 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     // /auth/callback already turned the email link into a session (cookie)
-    supabaseMerchantBrowser().auth.getUser().then(({ data }) => setValidLink(!!data.user))
+    withTimeout(supabaseMerchantBrowser().auth.getUser(), 15000, 'timeout')
+      .then(({ data }) => setValidLink(!!data.user))
+      .catch(() => setValidLink(false))
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -28,7 +31,13 @@ export default function ResetPasswordPage() {
     if (password !== confirm) { toast.error('The two passwords do not match'); return }
 
     setLoading(true)
-    const { error } = await supabaseMerchantBrowser().auth.updateUser({ password })
+    let error: { message: string } | null = null
+    try {
+      const r = await withTimeout(supabaseMerchantBrowser().auth.updateUser({ password }), 20000, 'The service did not answer. Please try again.')
+      error = r.error
+    } catch (e) {
+      error = { message: e instanceof Error ? e.message : 'Something went wrong' }
+    }
     setLoading(false)
     if (error) { toast.error(error.message); return }
 

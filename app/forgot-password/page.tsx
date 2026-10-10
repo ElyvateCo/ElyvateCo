@@ -1,4 +1,5 @@
 'use client'
+import { withTimeout } from '@/lib/fetchJson'
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Mail, Loader2, ArrowLeft } from 'lucide-react'
@@ -24,11 +25,17 @@ function ForgotForm() {
   async function send() {
     setLoading(true)
     const sb = supabaseMerchantBrowser()
-    const { error } = await sb.auth.resetPasswordForEmail(email.trim(), {
-      // The email link comes back here, signs the merchant in with a
-      // short-lived "recovery" session, then lands on /reset-password.
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-    })
+    let error: { message: string; status?: number } | null = null
+    try {
+      const r = await withTimeout(sb.auth.resetPasswordForEmail(email.trim(), {
+        // The email link comes back here, signs the merchant in with a
+        // short-lived "recovery" session, then lands on /reset-password.
+        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      }), 20000, 'The email service did not answer. Please try again.')
+      error = r.error
+    } catch (e) {
+      error = { message: e instanceof Error ? e.message : 'Something went wrong' }
+    }
     setLoading(false)
     if (error) {
       toast.error(error.status === 429

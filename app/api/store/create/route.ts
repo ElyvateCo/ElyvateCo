@@ -3,7 +3,7 @@ import { supabaseServer } from '@/lib/supabase-server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { validateSubdomain } from '@/lib/reservedSubdomains'
 
-export async function POST(req: NextRequest) {
+async function createStore(req: NextRequest) {
   // Who's asking, verified from their cookie session — never trust a
   // client-supplied user id here, or anyone could create a store owned
   // by someone else's account.
@@ -69,4 +69,15 @@ export async function POST(req: NextRequest) {
   })
 
   return NextResponse.json({ store })
+}
+
+// A crash here must still answer with readable JSON (the signup page shows
+// this message on screen) instead of an empty server-error page.
+export async function POST(req: NextRequest) {
+  try {
+    return await createStore(req)
+  } catch (err) {
+    console.error('Store create crashed:', err)
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Unexpected server error' }, { status: 500 })
+  }
 }

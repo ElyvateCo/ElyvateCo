@@ -1,4 +1,5 @@
 'use client'
+import { fetchJson, withTimeout } from '@/lib/fetchJson'
 import { ROOT_DOMAIN as REAL_ROOT_DOMAIN } from '@/lib/rootDomain'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -16,6 +17,10 @@ export default function MerchantSignupPage() {
   const [loading, setLoading]     = useState(false)
   // Set when Supabase requires the email to be confirmed before logging in
   const [awaitingEmail, setAwaitingEmail] = useState(false)
+  // Stays on screen (a toast disappears in seconds) so the exact problem can be read or screenshotted
+  const [errorMsg, setErrorMsg] = useState('')
+  // A live step-by-step log, so if anything ever hangs you can SEE which step it is stuck on
+  const [progress, setProgress] = useState<string[]>([])
   const [resendWait, setResendWait] = useState(0)
   const router = useRouter()
 
@@ -48,89 +53,102 @@ export default function MerchantSignupPage() {
     setResendWait(60)
   }
 
+  function fail(step: string, message: string) {
+    toast.error(message)
+    setErrorMsg(`${step}: ${message}`)
+    setLoading(false)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const sb = supabaseMerchantBrowser()
-
-    // 1. Make sure the store address is free BEFORE creating the account
-    const check = await fetch(`/api/store/check-subdomain?subdomain=${encodeURIComponent(subdomain.trim())}`).then(r => r.json()).catch(() => null)
-    // (If the check itself fails, carry on — the server checks again when the store is created)
-    if (check && check.available === false) {
-      toast.error(check.error || 'That store address is not available')
-      setLoading(false)
-      return
-    }
-
-    // 2. Create the account. The server makes it already-confirmed (no email
-    //    needed) unless REQUIRE_EMAIL_CONFIRMATION=true is set in Vercel — then
-    //    we use the normal Supabase sign-up that emails a confirmation link.
-    const pre = await fetch('/api/auth/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim(), password, storeName: storeName.trim(), subdomain: subdomain.trim() }),
-    }).then(async r => (await r.json()) as { mode?: string; error?: string }).catch(() => null)
-
-    if (pre?.error) {
-      toast.error(pre.error)
-      setLoading(false)
-      return
-    }
-
-    if (pre?.mode === 'created') {
-      const { error: signInError } = await sb.auth.signInWithPassword({ email: email.trim(), password })
-      if (signInError) {
-        toast.error('Your account was created. Please log in to continue.')
-        setLoading(false)
-        router.push('/login')
-        return
+    setErrorMsg('')
+    setProgress([])
+    const t0 = Date.now()
+    const note = (msg: string) => setProgress(p => [...p, `${((Date.now() - t0) / 1000).toFixed(1)}s  ${msg}`])
+    try {
+      // Step 1 — is the store address free?
+      note('1/4 checking the store address…')
+      const checkRes = await fetchJson(`/api/store/check-subdomain?subdomain=${encodeURIComponent(subdomain.trim())}`, {}, 15000)
+      const check = checkRes.data as { available?: boolean; error?: string; subdomain?: string }
+      // (If the check itself fails, carry on — the server checks again when the store is created)
+      if (checkRes.ok && check.available === false) {
+        return fail('Step 1 (store address)', String(check.error || 'That store address is not available'))
       }
-    } else {
-      const { data, error } = await sb.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          emailRedirectTo: confirmRedirect(),
-          data: { store_name: storeName.trim(), subdomain: (check?.subdomain as string | undefined) ?? subdomain.trim().toLowerCase() },
-        },
+
+      note(checkRes.ok ? 'address is free ✓' : 'address check skipped')
+
+      // Step 2 — create the account. The server makes it already-confirmed
+      // (no email needed) unless REQUIRE_EMAIL_CONFIRMATION=true is set in
+      // Vercel — then we use the normal Supabase sign-up that emails a link.
+      note('2/4 creating your account…')
+      const signupRes = await fetchJson('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password, storeName: storeName.trim(), subdomain: subdomain.trim() }),
       })
-      if (error || !data.user) {
-        toast.error(friendlyAuthError(error?.message || 'Could not create account'))
-        setLoading(false)
-        return
+      const pre = signupRes.data as { mode?: string; error?: string }
+
+      if (!signupRes.ok) return fail('Step 2 (create account)', String(pre.error || 'Could not create the account'))
+
+      note('account created ✓')
+      if (pre.mode === 'created') {
+        // Log in on the server (cookie session) — no browser auth call involved
+        note('3/4 logging you in…')
+        const loginRes = await fetchJson('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), password }),
+        })
+        if (!loginRes.ok) {
+          setLoading(false)
+          toast.error('Your account was created. Please log in to continue.')
+          router.push('/login')
+          return
+        }
+        note('logged in ✓')
+      } else {
+        const sb = supabaseMerchantBrowser()
+        const { data, error } = await withTimeout(sb.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            emailRedirectTo: confirmRedirect(),
+            data: { store_name: storeName.trim(), subdomain: check.subdomain ?? subdomain.trim().toLowerCase() },
+          },
+        }), 20000, 'The sign-up service did not answer. Please try again.')
+        if (error || !data.user) return fail('Step 2 (create account)', friendlyAuthError(error?.message || 'Could not create account'))
+        // Supabase hides "this email already exists" by returning a user with no identities
+        if (data.user.identities && data.user.identities.length === 0) {
+          return fail('Step 2 (create account)', 'An account with this email already exists. Please log in instead.')
+        }
+        // Email confirmation is required: no session yet. The store is created in
+        // onboarding right after they click the link in the email.
+        if (!data.session) {
+          setAwaitingEmail(true)
+          setResendWait(60)
+          setLoading(false)
+          return
+        }
       }
-      // Supabase hides "this email already exists" by returning a user with no identities
-      if (data.user.identities && data.user.identities.length === 0) {
-        toast.error('An account with this email already exists. Please log in instead.')
-        setLoading(false)
-        return
-      }
-      // Email confirmation is required: no session yet. The store is created in
-      // onboarding right after they click the link in the email.
-      if (!data.session) {
-        setAwaitingEmail(true)
-        setResendWait(60)
-        setLoading(false)
-        return
-      }
+
+      // Step 3 — create the store for the logged-in account
+      note('4/4 creating your store…')
+      const created = await fetchJson('/api/store/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeName, subdomain }),
+      })
+      if (!created.ok) return fail(`Step 3 (create store, HTTP ${created.status})`, String(created.data.error || 'Could not create your store'))
+
+      note('store created ✓ — opening setup')
+      setLoading(false)
+      toast.success('Store created!')
+      router.push('/onboarding')
+      router.refresh()
+    } catch (err) {
+      fail('Unexpected error', err instanceof Error ? err.message : 'Something went wrong. Please try again.')
     }
-
-    const res = await fetch('/api/store/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ storeName, subdomain }),
-    })
-    const result = await res.json()
-    setLoading(false)
-
-    if (!res.ok) {
-      toast.error(result.error || 'Could not create your store')
-      return
-    }
-
-    toast.success('Store created!')
-    router.push('/onboarding')
-    router.refresh()
   }
 
   // Wired up now — starts working the moment Google is enabled in
@@ -208,6 +226,16 @@ export default function MerchantSignupPage() {
                 value={password} onChange={e => setPassword(e.target.value)} />
             </div>
           </div>
+
+          {progress.length > 0 && (
+            <div className="text-xs text-ink-muted font-mono space-y-0.5 bg-surface-50 rounded-xl px-3 py-2">
+              {progress.map((line, i) => <p key={i}>{line}</p>)}
+            </div>
+          )}
+
+          {errorMsg && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 break-words">{errorMsg}</p>
+          )}
 
           <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
             {loading && <Loader2 size={16} className="animate-spin" />}

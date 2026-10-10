@@ -1,4 +1,5 @@
 'use client'
+import { fetchJson } from '@/lib/fetchJson'
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Mail, Lock, Loader2 } from 'lucide-react'
@@ -32,10 +33,17 @@ function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const sb = supabaseMerchantBrowser()
-    const { error } = await sb.auth.signInWithPassword({ email, password })
-    setLoading(false)
-    if (error) { toast.error(error.message); return }
+    // Log in on the server — the session lands in the login cookies directly
+    const res = await fetchJson('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    if (!res.ok) {
+      setLoading(false)
+      toast.error(String(res.data.error || 'Could not log in'))
+      return
+    }
     window.location.assign(redirect)
   }
 

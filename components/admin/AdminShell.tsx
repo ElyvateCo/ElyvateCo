@@ -1,11 +1,11 @@
 'use client'
+import { fetchJson } from '@/lib/fetchJson'
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Menu, X, ExternalLink, LogOut } from 'lucide-react'
 import AdminSidebar from './AdminSidebar'
 import AdminLightModeGuard from './AdminLightModeGuard'
 import { AdminPathProvider } from './AdminPathContext'
-import { supabaseMerchantBrowser } from '@/lib/supabase-merchant'
 
 // Same cookie middleware.ts uses for the ?store= preview
 const PREVIEW_COOKIE = 'elyvate_preview_store'
@@ -40,7 +40,7 @@ export default function AdminShell({ storeName, subdomain, storeUrl, storeLabel,
 
   async function handleLogout() {
     setLoggingOut(true)
-    try { await supabaseMerchantBrowser().auth.signOut() } catch {}
+    await fetchJson('/api/auth/logout', { method: 'POST' }, 10000)
     document.cookie = `${PREVIEW_COOKIE}=; path=/; max-age=0`
     router.push('/login')
     router.refresh()
