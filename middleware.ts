@@ -18,6 +18,20 @@ function isPlatformHost(req: NextRequest): boolean {
 }
 
 export async function middleware(req: NextRequest) {
+  // Block state-changing API calls that come from another website (CSRF).
+  // Browsers always send an Origin header on cross-site POSTs.
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.nextUrl.pathname.startsWith('/api/')) {
+    const origin = req.headers.get('origin')
+    if (origin) {
+      let originHost = ''
+      try { originHost = new URL(origin).host } catch { /* invalid origin */ }
+      const hosts = [req.headers.get('host'), req.headers.get('x-forwarded-host')].filter(Boolean)
+      if (!hosts.includes(originHost)) {
+        return NextResponse.json({ error: 'Cross-site request blocked' }, { status: 403 })
+      }
+    }
+  }
+
 
   // ── FIX: CVE-2025-29927 ─────────────────────────────────────────────────
   // Attackers can bypass all middleware auth by adding this header to any

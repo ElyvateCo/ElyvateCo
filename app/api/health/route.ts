@@ -2,6 +2,7 @@ import { ROOT_DOMAIN } from '@/lib/rootDomain'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { secretBoxReady } from '@/lib/secretBox'
+import { healthKeyOk } from '@/lib/healthKey'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,8 @@ const DB_CHECKS: { label: string; table: string; columns: string; fix: string }[
   { label: 'store_gateway_secrets table',     table: 'store_gateway_secrets', columns: 'id, store_id, credentials_encrypted',         fix: 'run supabase-migration-gateways-delivery-admin.sql' },
 ]
 
-export async function GET() {
+export async function GET(req: Request) {
+  if (!healthKeyOk(req)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const env = {
     NEXT_PUBLIC_SUPABASE_URL:      !!process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,

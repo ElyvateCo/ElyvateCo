@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
 import { checkLink } from '@/lib/mediaLinks'
+import { stripProtected } from '@/lib/stripProtected'
 
 export async function PUT(req: NextRequest) {
   const store = await getOwnedStore()
@@ -10,7 +11,7 @@ export async function PUT(req: NextRequest) {
   const body = await req.json()
   // A merchant can never re-assign this row to another store or change its id
   delete body.store_id
-  delete body.id
+  stripProtected(body)
 
   // Banner images/videos are pasted LINKS — must be real https links
   for (const [key, label] of [

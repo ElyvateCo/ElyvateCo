@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
 import { parseHttpsUrl, parseUrlList } from '@/lib/mediaLinks'
+import { stripProtected } from '@/lib/stripProtected'
 
 // Photos/videos are LINKS pasted by the merchant — keep only valid https links.
 function cleanMedia(body: Record<string, unknown>) {
@@ -39,7 +40,7 @@ export async function PUT(req: NextRequest) {
   if (!store) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id, ...rawRest } = await req.json()
-  const rest = cleanMedia(rawRest)
+  const rest = stripProtected(cleanMedia(rawRest))
   if (!id) return NextResponse.json({ error: 'Missing product id' }, { status: 400 })
 
   // Never let store_id be overwritten via the update payload

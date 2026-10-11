@@ -9,6 +9,14 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // Use inside Server Components, Route Handlers, and Server Actions.
 // Reads the merchant's session from cookies (set by supabaseMerchantBrowser
 // on the client — see lib/supabase-merchant.ts).
+// Login cookies can't be read by JavaScript, so a page bug (XSS) can no longer
+// steal a session. (The "code-verifier" cookie stays readable — the browser
+// needs it for Google sign-in.)
+const IS_PROD = process.env.NODE_ENV === 'production'
+function secure(name: string) {
+  return name.includes('code-verifier') ? {} : { httpOnly: true, secure: IS_PROD, sameSite: 'lax' as const }
+}
+
 export function supabaseServer() {
   const cookieStore = cookies()
   const h = headers()
@@ -17,13 +25,13 @@ export function supabaseServer() {
     cookies: {
       get: (name: string) => cookieStore.get(name)?.value,
       set: (name: string, value: string, options: CookieOptions) => {
-        try { cookieStore.set({ name, value, ...options, ...(domain ? { domain } : {}) }) } catch {
+        try { cookieStore.set({ name, value, ...options, ...secure(name), ...(domain ? { domain } : {}) }) } catch {
           // Called from a Server Component render — cookies can't be set
           // there. Safe to ignore; middleware refreshes the session instead.
         }
       },
       remove: (name: string, options: CookieOptions) => {
-        try { cookieStore.set({ name, value: '', ...options, ...(domain ? { domain } : {}) }) } catch {}
+        try { cookieStore.set({ name, value: '', ...options, ...secure(name), ...(domain ? { domain } : {}) }) } catch {}
       },
     },
   })
@@ -37,10 +45,10 @@ export function supabaseMiddleware(req: NextRequest, res: NextResponse) {
     cookies: {
       get: (name: string) => req.cookies.get(name)?.value,
       set: (name: string, value: string, options: CookieOptions) => {
-        res.cookies.set({ name, value, ...options, ...(domain ? { domain } : {}) })
+        res.cookies.set({ name, value, ...options, ...secure(name), ...(domain ? { domain } : {}) })
       },
       remove: (name: string, options: CookieOptions) => {
-        res.cookies.set({ name, value: '', ...options, ...(domain ? { domain } : {}) })
+        res.cookies.set({ name, value: '', ...options, ...secure(name), ...(domain ? { domain } : {}) })
       },
     },
   })

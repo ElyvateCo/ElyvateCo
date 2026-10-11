@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabase-server'
-import { rateLimit, getIP } from '@/lib/rateLimit'
+import { getIP } from '@/lib/rateLimit'
+import { hit } from '@/lib/rateLimitDb'
 import { getRequestOrigin } from '@/lib/requestOrigin'
 
 // "Forgot password" on the SERVER (the browser auth client crashes inside
 // some in-app browsers, e.g. Instagram's). The email link comes back through
 // /auth/callback and lands on /reset-password.
 export async function POST(req: NextRequest) {
-  if (!rateLimit(getIP(req), 'forgot', { max: 5, windowMs: 10 * 60_000 })) {
+  if (!(await hit(`forgot:ip:${getIP(req)}`, 5, 600))) {
     return NextResponse.json({ error: 'Too many requests. Please wait a few minutes and try again.' }, { status: 429 })
   }
   const body = await req.json().catch(() => ({}))

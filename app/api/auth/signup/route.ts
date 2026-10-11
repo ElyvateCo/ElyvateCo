@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { validateSubdomain } from '@/lib/reservedSubdomains'
-import { rateLimit, getIP } from '@/lib/rateLimit'
+import { getIP } from '@/lib/rateLimit'
+import { hit } from '@/lib/rateLimitDb'
 
 // Creates a merchant account that is ALREADY confirmed, so signing up works
 // even before email sending (SMTP) is set up — Supabase's built-in email
@@ -12,7 +13,7 @@ import { rateLimit, getIP } from '@/lib/rateLimit'
 // in Vercel and sign-up goes back to the normal "click the link we emailed
 // you" flow.
 export async function POST(req: NextRequest) {
-  if (!rateLimit(getIP(req), 'signup', { max: 10, windowMs: 60 * 60_000 })) {
+  if (!(await hit(`signup:ip:${getIP(req)}`, 10, 3600))) {
     return NextResponse.json({ error: 'Too many sign-up attempts. Please try again later.' }, { status: 429 })
   }
 

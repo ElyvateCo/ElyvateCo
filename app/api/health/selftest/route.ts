@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit, getIP } from '@/lib/rateLimit'
+import { healthKeyOk } from '@/lib/healthKey'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -28,6 +29,7 @@ async function step(name: string, fn: () => Promise<unknown>, ms = 12000): Promi
 }
 
 export async function GET(req: NextRequest) {
+  if (!healthKeyOk(req)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const version = {
     build: 'server-signup-v3',
     commit: (process.env.VERCEL_GIT_COMMIT_SHA || 'unknown').slice(0, 7),

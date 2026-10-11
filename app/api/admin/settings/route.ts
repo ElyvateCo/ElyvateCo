@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
 import { checkLink } from '@/lib/mediaLinks'
+import { stripProtected } from '@/lib/stripProtected'
 import { normalizeBDPhone } from '@/lib/phone'
 
 export async function PUT(req: NextRequest) {
@@ -11,7 +12,7 @@ export async function PUT(req: NextRequest) {
   const body = await req.json()
   // A merchant can never re-assign this row to another store or change its id
   delete body.store_id
-  delete body.id
+  stripProtected(body)
 
   // Logo and custom font are pasted LINKS. The font link is written into a
   // <style> tag on the storefront, so it gets the strict "CSS-safe" check.
