@@ -130,7 +130,14 @@ export default function CheckoutPage() {
         .eq('store_id', storeId).maybeSingle()
     )
       .then(r => r.error ? supabase.from('site_settings').select(BASE).eq('store_id', storeId).maybeSingle() : r)
-      .then(({ data }) => {
+      .then(res => {
+        // Either query shape may have answered — read it through one loose type
+        const data = res.data as {
+          crypto_usdt_enabled?: boolean; cod_enabled?: boolean
+          bkash_enabled?: boolean; bkash_number?: string | null; bkash_type?: string | null
+          nagad_enabled?: boolean; nagad_number?: string | null; nagad_type?: string | null
+          bkash_auto_enabled?: boolean; nagad_auto_enabled?: boolean
+        } | null
         setCryptoEnabled(!!data?.crypto_usdt_enabled)
         setBkashAuto(!!data?.bkash_auto_enabled)
         setNagadAuto(!!data?.nagad_auto_enabled)
