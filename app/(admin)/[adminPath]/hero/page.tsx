@@ -5,6 +5,7 @@ import { isHttpsUrl, checkLink } from '@/lib/mediaLinks'
 import { Monitor, Smartphone, Video } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
+import VideoTemplatePicker from '@/components/admin/VideoTemplatePicker'
 
 export default function AdminHero() {
   const [hero, setHero] = useState<Partial<HeroSection>>({})
@@ -120,6 +121,14 @@ export default function AdminHero() {
               onChange={e => setHero(h => ({ ...h, bg_image: e.target.value }))}
             />
             <p className="text-xs text-ink-muted mt-1.5 mb-3">Recommended: 1920×1080px or larger, landscape</p>
+
+            {/* Ready-made videos from the platform */}
+            <div className="mt-4">
+              <VideoTemplatePicker
+                current={hero.bg_video}
+                onPick={url => { setHero(h => ({ ...h, bg_video: url })); toast.success('Video selected — press Save') }}
+              />
+            </div>
 
             {/* Desktop video */}
             <label className="label flex items-center gap-2 mt-3">

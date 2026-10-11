@@ -2,7 +2,7 @@ import { formatPrice } from '@/lib/money'
 import { supabaseAdmin } from '@/lib/supabase'
 import { redirect } from 'next/navigation'
 import { getOwnedStore } from '@/lib/ownedStore'
-import { ShoppingBag, Banknote, Package, TrendingUp } from 'lucide-react'
+import { ShoppingBag, Banknote, Package, TrendingUp, Film } from 'lucide-react'
 
 export const revalidate = 0
 
@@ -30,6 +30,14 @@ export default async function AdminDashboard() {
   if (!store || store.onboarding_completed === false) redirect('/onboarding')
   const [stats, orders] = await Promise.all([getStats(store.id), getRecentOrders(store.id)])
 
+  // Suggest a ready-made background video until the store has one
+  const db = supabaseAdmin()
+  const [{ data: hero }, { count: templateCount }] = await Promise.all([
+    db.from('hero_section').select('bg_video').eq('store_id', store.id).maybeSingle(),
+    db.from('video_templates').select('id', { count: 'exact', head: true }).eq('is_active', true),
+  ])
+  const suggestVideo = !hero?.bg_video && (templateCount ?? 0) > 0
+
   const cards = [
     { label: 'Total Revenue',  value: `${formatPrice(stats.totalRevenue)}`, icon: Banknote,  color: 'text-green-600',  bg: 'bg-green-50' },
     { label: 'Total Orders',   value: stats.orders,                         icon: ShoppingBag, color: 'text-brand-600',  bg: 'bg-brand-50' },
@@ -40,6 +48,16 @@ export default async function AdminDashboard() {
   return (
     <div>
       <h1 className="font-display text-2xl font-semibold text-ink-primary mb-8">Dashboard</h1>
+
+      {suggestVideo && (
+        <a href={`/${store.admin_path || 'admin'}/hero`} className="flex items-center gap-4 bg-brand-50 border border-brand-100 rounded-2xl p-4 mb-6 hover:bg-brand-100/60 transition-colors">
+          <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center shrink-0"><Film size={20} className="text-brand-600" /></div>
+          <div>
+            <p className="font-semibold text-sm text-ink-primary">Make your store come alive</p>
+            <p className="text-xs text-ink-secondary">Pick a ready-made background video for your homepage — no need to make your own.</p>
+          </div>
+        </a>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">

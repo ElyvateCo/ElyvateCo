@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { rateLimit, getIP, limits } from '@/lib/rateLimit'
+import { getCurrentStore } from '@/lib/currentStore'
 
 export async function POST(req: NextRequest) {
   const ip = getIP(req)
@@ -18,7 +19,8 @@ export async function POST(req: NextRequest) {
     const userAgent   = req.headers.get('user-agent')?.slice(0, 500) ?? null
 
     const db = supabaseAdmin()
-    await db.from('error_logs').insert({ message, stack, url, user_agent: userAgent })
+    const store = await getCurrentStore()
+    await db.from('error_logs').insert({ message, stack, url, user_agent: userAgent, store_id: store?.id ?? null })
 
     return NextResponse.json({ ok: true })
   } catch {
