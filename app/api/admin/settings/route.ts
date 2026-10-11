@@ -50,12 +50,23 @@ export async function PUT(req: NextRequest) {
 
   const { data: existing } = await db.from('site_settings').select('id').eq('store_id', store.id).maybeSingle()
 
-  const result = existing?.id
+  // If the database lacks an optional column (a migration wasn't run), drop just
+  // that field and save the rest — instead of failing the whole save.
+  const skipped: string[] = []
+  let result = existing?.id
     ? await db.from('site_settings').update(body).eq('id', existing.id).select().single()
     : await db.from('site_settings').insert({ ...body, store_id: store.id }).select().single()
+  for (let i = 0; i < 8 && result.error; i++) {
+    const m = /Could not find the '([a-z_]+)' column/.exec(result.error.message)
+    if (!m || !(m[1] in body)) break
+    delete body[m[1]]; skipped.push(m[1])
+    result = existing?.id
+      ? await db.from('site_settings').update(body).eq('id', existing.id).select().single()
+      : await db.from('site_settings').insert({ ...body, store_id: store.id }).select().single()
+  }
 
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: 500 })
-  return NextResponse.json({ data: result.data })
+  return NextResponse.json({ data: result.data, skipped })
 }
 
 // GET — this store's own settings row (used by the admin settings page)

@@ -81,8 +81,8 @@ export async function POST(req: NextRequest) {
       .eq('store_id', store.id)
       .maybeSingle()
     if (settingsError) {
-      // Newer columns missing (migration not run yet) — fall back to the basics
-      ;({ data: settings } = await db.from('site_settings').select(SETTINGS_COLS).eq('store_id', store.id).maybeSingle())
+      // Optional columns missing (migration not run yet) — fall back to the basics
+      ;({ data: settings } = await db.from('site_settings').select('cod_enabled, bkash_enabled, bkash_number, bkash_type, nagad_enabled, nagad_number, nagad_type').eq('store_id', store.id).maybeSingle())
     }
 
     let cryptoConfig: { address: string; network: string } | null = null

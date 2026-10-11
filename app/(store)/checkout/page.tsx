@@ -121,11 +121,15 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!storeId) return
-    supabase
-      .from('site_settings')
-      .select('crypto_usdt_enabled, cod_enabled, bkash_enabled, bkash_number, bkash_type, nagad_enabled, nagad_number, nagad_type, bkash_auto_enabled, nagad_auto_enabled')
-      .eq('store_id', storeId)
-      .maybeSingle()
+    const BASE = 'cod_enabled, bkash_enabled, bkash_number, bkash_type, nagad_enabled, nagad_number, nagad_type'
+    // Optional columns (crypto / online payment) might not exist yet — if the full
+    // query fails, retry with the basics so bKash / Nagad still show up.
+    Promise.resolve(
+      supabase.from('site_settings')
+        .select(`crypto_usdt_enabled, ${BASE}, bkash_auto_enabled, nagad_auto_enabled`)
+        .eq('store_id', storeId).maybeSingle()
+    )
+      .then(r => r.error ? supabase.from('site_settings').select(BASE).eq('store_id', storeId).maybeSingle() : r)
       .then(({ data }) => {
         setCryptoEnabled(!!data?.crypto_usdt_enabled)
         setBkashAuto(!!data?.bkash_auto_enabled)

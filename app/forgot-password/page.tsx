@@ -1,9 +1,8 @@
 'use client'
-import { withTimeout } from '@/lib/fetchJson'
+import { fetchJson } from '@/lib/fetchJson'
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Mail, Loader2, ArrowLeft } from 'lucide-react'
-import { supabaseMerchantBrowser } from '@/lib/supabase-merchant'
 import toast from 'react-hot-toast'
 
 export const dynamic = 'force-dynamic'
@@ -24,25 +23,13 @@ function ForgotForm() {
 
   async function send() {
     setLoading(true)
-    const sb = supabaseMerchantBrowser()
-    let error: { message: string; status?: number } | null = null
-    try {
-      const r = await withTimeout(sb.auth.resetPasswordForEmail(email.trim(), {
-        // The email link comes back here, signs the merchant in with a
-        // short-lived "recovery" session, then lands on /reset-password.
-        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-      }), 20000, 'The email service did not answer. Please try again.')
-      error = r.error
-    } catch (e) {
-      error = { message: e instanceof Error ? e.message : 'Something went wrong' }
-    }
+    const res = await fetchJson('/api/auth/forgot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim() }),
+    })
     setLoading(false)
-    if (error) {
-      toast.error(error.status === 429
-        ? 'Too many requests. Please wait a few minutes and try again.'
-        : error.message)
-      return
-    }
+    if (!res.ok) { toast.error(String(res.data.error || 'Could not send the email')); return }
     setSent(true)
     setWait(60)
   }

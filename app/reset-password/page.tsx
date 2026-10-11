@@ -1,9 +1,8 @@
 'use client'
-import { withTimeout } from '@/lib/fetchJson'
+import { fetchJson } from '@/lib/fetchJson'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Lock, Loader2 } from 'lucide-react'
-import { supabaseMerchantBrowser } from '@/lib/supabase-merchant'
 import toast from 'react-hot-toast'
 
 export const dynamic = 'force-dynamic'
@@ -20,9 +19,7 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     // /auth/callback already turned the email link into a session (cookie)
-    withTimeout(supabaseMerchantBrowser().auth.getUser(), 15000, 'timeout')
-      .then(({ data }) => setValidLink(!!data.user))
-      .catch(() => setValidLink(false))
+    fetchJson('/api/auth/password').then(r => setValidLink(r.ok && r.data.valid === true))
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -31,15 +28,13 @@ export default function ResetPasswordPage() {
     if (password !== confirm) { toast.error('The two passwords do not match'); return }
 
     setLoading(true)
-    let error: { message: string } | null = null
-    try {
-      const r = await withTimeout(supabaseMerchantBrowser().auth.updateUser({ password }), 20000, 'The service did not answer. Please try again.')
-      error = r.error
-    } catch (e) {
-      error = { message: e instanceof Error ? e.message : 'Something went wrong' }
-    }
+    const res = await fetchJson('/api/auth/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    })
     setLoading(false)
-    if (error) { toast.error(error.message); return }
+    if (!res.ok) { toast.error(String(res.data.error || 'Could not save the password')); return }
 
     toast.success('Password updated!')
     window.location.assign('/go-admin')
