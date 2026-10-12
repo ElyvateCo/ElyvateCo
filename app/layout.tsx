@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { DM_Sans, Playfair_Display } from 'next/font/google'
+import { Plus_Jakarta_Sans, Hind_Siliguri } from 'next/font/google'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/lib/authContext'
@@ -10,16 +10,22 @@ import { THEME_PRESETS, DEFAULT_THEME_PRESET, isThemePresetKey, isValidHex, gene
 import { DARK_MODE_INIT_SCRIPT } from '@/lib/useDarkMode'
 import GlobalErrorListener from '@/components/GlobalErrorListener'
 
-const dmSans = DM_Sans({
+// One clean, bold-capable sans font for everything (headings and body).
+// Hind Siliguri is the Bangla fallback: it is only downloaded when a page
+// actually contains Bangla letters.
+const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
   variable: '--font-body',
-  weight: ['300', '400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700', '800'],
+  display: 'swap',
 })
 
-const playfair = Playfair_Display({
-  subsets: ['latin'],
-  variable: '--font-display',
-  weight: ['400', '600', '700'],
+const hind = Hind_Siliguri({
+  subsets: ['bengali', 'latin'],
+  variable: '--font-bn',
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  preload: false,
 })
 
 export const metadata: Metadata = {
@@ -106,7 +112,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html
       lang="en"
-      className={`${dmSans.variable} ${playfair.variable}`}
+      className={`${jakarta.variable} ${hind.variable}`}
       style={Object.keys(htmlStyle).length ? (htmlStyle as React.CSSProperties) : undefined}
     >
       <body className="font-body text-ink-primary antialiased">

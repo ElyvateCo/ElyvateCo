@@ -24,6 +24,14 @@ export default function MerchantSignupPage() {
   const [resendWait, setResendWait] = useState(0)
   const router = useRouter()
 
+  // Coming from the landing page ("Type your shop name") — pre-fill the form
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('store')?.trim().slice(0, 40)
+    if (!q) return
+    setStoreName(q)
+    setSubdomain(q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30))
+  }, [])
+
   useEffect(() => {
     if (resendWait <= 0) return
     const t = setTimeout(() => setResendWait(w => w - 1), 1000)

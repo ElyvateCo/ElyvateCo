@@ -69,6 +69,7 @@
 
   h1, h2, h3 {
     @apply font-display;
+    letter-spacing: -0.02em;
   }
 
   /* CSS Grid items default to min-width: auto, which lets long text or
@@ -239,4 +240,9 @@
 .loader-subtitle-text {
   display: inline-block;
   animation: loaderSubtextBreathe 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Headings use the same font as the body unless a store sets its own custom font */
+@layer base {
+  html { --font-display: var(--font-body); }
 }

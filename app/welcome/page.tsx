@@ -3,8 +3,9 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import {
   Store, LayoutDashboard, Wallet, Globe, Smartphone, Palette,
-  ArrowRight, Check,
+  ArrowRight, Check, ChevronDown,
 } from 'lucide-react'
+import StoreNameDemo from '@/components/landing/StoreNameDemo'
 import { supabaseServer } from '@/lib/supabase-server'
 import { getOwnedStore } from '@/lib/ownedStore'
 
@@ -27,7 +28,7 @@ const FEATURES = [
   {
     icon: Store,
     title: 'Your own store, instantly',
-    text: 'Get your own web address like yourshop.elyvate.com the moment you sign up.',
+    text: 'Get your own web address like yourshop.elyvateco.com the moment you sign up.',
   },
   {
     icon: LayoutDashboard,
@@ -37,8 +38,7 @@ const FEATURES = [
   {
     icon: Wallet,
     title: 'Local payments',
-    text: 'Get paid with bKash and Nagad, straight to your own account.',
-    badge: 'Rolling out',
+    text: 'Cash on Delivery, bKash and Nagad — your customers pay the way they already do.',
   },
   {
     icon: Globe,
@@ -54,7 +54,7 @@ const FEATURES = [
   {
     icon: Palette,
     title: 'Make it yours',
-    text: 'Pick your colors, write your headline and add announcements — no code needed.',
+    text: 'Pick your colors, write your headline and choose a ready-made background video — no code needed.',
   },
 ]
 
@@ -62,6 +62,13 @@ const STEPS = [
   { n: '1', title: 'Sign up', text: 'Create your account and choose your store name and address.' },
   { n: '2', title: 'Set up your store', text: 'Tell us what you sell and pick your colors. Takes about two minutes.' },
   { n: '3', title: 'Add products & share', text: 'Add your products, then share your store link with your customers.' },
+]
+
+const FAQ = [
+  { q: 'Do I need my own domain?', a: 'No. You get your own store address the moment you sign up. You can connect a domain you bought later.' },
+  { q: 'How do I get paid?', a: 'Customers can pay with Cash on Delivery, or send money by bKash or Nagad. You confirm each payment in your dashboard.' },
+  { q: 'Is it really free?', a: 'Yes — you can open your store and start selling for free. Paid plans with extra features are coming later.' },
+  { q: 'Can I use it in Bangla?', a: 'Your dashboard is in English for now. You can write your product names and descriptions in Bangla, English, or both.' },
 ]
 
 const FREE_PLAN = [
@@ -122,25 +129,39 @@ export default async function PlatformLandingPage() {
       </header>
 
       {/* ── Hero ────────────────────────────────────────────────── */}
-      <section className="section-pad pt-16 pb-20 md:pt-24 md:pb-28">
+      <section className="section-pad pt-16 pb-20 md:pt-24 md:pb-28 bg-gradient-to-b from-brand-50/60 to-transparent">
         <div className="container-xl max-w-3xl text-center">
-          <span className="inline-block text-xs font-medium bg-brand-50 text-brand-700 px-3 py-1 rounded-full mb-6">
+          <span className="inline-block text-xs font-semibold bg-white text-brand-700 border border-brand-100 px-3 py-1 rounded-full mb-6">
             Built for sellers in Bangladesh
           </span>
           <h1 className="font-display text-4xl sm:text-5xl md:text-6xl font-semibold leading-tight">
-            Your online store, live in minutes.
+            Your online store, live <span className="text-brand-600">in minutes.</span>
           </h1>
           <p className="mt-6 text-base md:text-lg text-ink-secondary max-w-2xl mx-auto">
             Turn your Facebook page into a real online store. Add your products, take orders and
             manage everything from one simple dashboard — no coding, no headaches.
           </p>
-          <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href={primaryHref} className="btn-primary inline-flex items-center justify-center gap-2 !px-8 !py-4">
-              {primaryLabel} <ArrowRight size={16} />
-            </Link>
-            <a href="#how" className="btn-outline inline-flex items-center justify-center !px-8 !py-4">
-              See how it works
-            </a>
+
+          <div className="mt-8">
+            {store ? (
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link href={primaryHref} className="btn-primary inline-flex items-center justify-center gap-2 !px-8 !py-4">
+                  {primaryLabel} <ArrowRight size={16} />
+                </Link>
+                <a href="#how" className="btn-outline inline-flex items-center justify-center !px-8 !py-4">
+                  See how it works
+                </a>
+              </div>
+            ) : (
+              <StoreNameDemo rootDomain={ROOT_DOMAIN || 'elyvateco.com'} />
+            )}
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-2 text-xs text-ink-secondary">
+            <span className="text-ink-muted">Get paid with</span>
+            {['Cash on Delivery', 'bKash', 'Nagad'].map(m => (
+              <span key={m} className="font-semibold bg-white border border-surface-200 px-3 py-1 rounded-full">{m}</span>
+            ))}
           </div>
           <p className="mt-4 text-xs text-ink-muted">Free to start. No credit card needed.</p>
         </div>
@@ -234,6 +255,24 @@ export default async function PlatformLandingPage() {
               </ul>
               <Link href="/signup" className="btn-outline block text-center">Join the beta</Link>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Questions ───────────────────────────────────────────── */}
+      <section className="section-pad py-16 md:py-20">
+        <div className="container-xl max-w-2xl">
+          <h2 className="font-display text-3xl md:text-4xl font-semibold text-center mb-8">Questions, answered</h2>
+          <div className="space-y-3">
+            {FAQ.map(({ q, a }) => (
+              <details key={q} className="group card p-5">
+                <summary className="flex items-center justify-between gap-4 cursor-pointer list-none font-semibold">
+                  {q}
+                  <ChevronDown size={18} className="shrink-0 text-ink-muted transition-transform group-open:rotate-180" />
+                </summary>
+                <p className="mt-3 text-sm text-ink-secondary leading-relaxed">{a}</p>
+              </details>
+            ))}
           </div>
         </div>
       </section>
