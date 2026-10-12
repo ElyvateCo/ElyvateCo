@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Plus_Jakarta_Sans, Hind_Siliguri } from 'next/font/google'
+import { DM_Sans } from 'next/font/google'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/lib/authContext'
@@ -10,22 +10,14 @@ import { THEME_PRESETS, DEFAULT_THEME_PRESET, isThemePresetKey, isValidHex, gene
 import { DARK_MODE_INIT_SCRIPT } from '@/lib/useDarkMode'
 import GlobalErrorListener from '@/components/GlobalErrorListener'
 
-// One clean, bold-capable sans font for everything (headings and body).
-// Hind Siliguri is the Bangla fallback: it is only downloaded when a page
-// actually contains Bangla letters.
-const jakarta = Plus_Jakarta_Sans({
+// One clean sans font for everything (headings and body). DM Sans is the
+// same font that already builds reliably on this Next.js version.
+// Bangla letters use the phone's / computer's own Bangla font automatically.
+const dmSans = DM_Sans({
   subsets: ['latin'],
   variable: '--font-body',
-  weight: ['400', '500', '600', '700', '800'],
-  display: 'swap',
-})
-
-const hind = Hind_Siliguri({
-  subsets: ['bengali', 'latin'],
-  variable: '--font-bn',
   weight: ['400', '500', '600', '700'],
   display: 'swap',
-  preload: false,
 })
 
 export const metadata: Metadata = {
@@ -112,7 +104,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html
       lang="en"
-      className={`${jakarta.variable} ${hind.variable}`}
+      className={dmSans.variable}
       style={Object.keys(htmlStyle).length ? (htmlStyle as React.CSSProperties) : undefined}
     >
       <body className="font-body text-ink-primary antialiased">

@@ -48,8 +48,8 @@ module.exports = {
         },
       },
       fontFamily: {
-        display: ['var(--font-display)', 'var(--font-bn)', 'sans-serif'],
-        body:    ['var(--font-body)', 'var(--font-bn)', 'sans-serif'],
+        display: ['var(--font-display)', 'sans-serif'],
+        body:    ['var(--font-body)', 'sans-serif'],
       },
       // "Semibold" becomes a true bold across the whole platform
       fontWeight: { semibold: '700' },
