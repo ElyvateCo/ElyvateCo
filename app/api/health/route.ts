@@ -16,6 +16,7 @@ const DB_CHECKS: { label: string; table: string; columns: string; fix: string }[
   { label: 'site_settings payment columns',   table: 'site_settings',        columns: 'cod_enabled, bkash_enabled, bkash_number, nagad_enabled, nagad_number', fix: 'run supabase-migration-bd-payments.sql' },
   { label: 'site_settings online-payment flags', table: 'site_settings',     columns: 'bkash_auto_enabled, nagad_auto_enabled',       fix: 'run supabase-migration-gateways-delivery-admin.sql' },
   { label: 'site_settings crypto columns',    table: 'site_settings',        columns: 'crypto_usdt_enabled, crypto_usdt_address',     fix: 'run supabase-fix-site-settings.sql' },
+  { label: 'store_customers table',          table: 'store_customers',      columns: 'id, store_id, user_id',                        fix: 'run supabase-migration-customers.sql' },
   { label: 'delivery_zones table',            table: 'delivery_zones',       columns: 'id, store_id, charge',                         fix: 'run supabase-migration-gateways-delivery-admin.sql' },
   { label: 'store_gateway_secrets table',     table: 'store_gateway_secrets', columns: 'id, store_id, credentials_encrypted',         fix: 'run supabase-migration-gateways-delivery-admin.sql' },
 ]
