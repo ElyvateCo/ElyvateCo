@@ -49,6 +49,10 @@ async function createStore(req: NextRequest) {
   if (storeError && /admin_path/.test(storeError.message)) {
     ;({ data: store, error: storeError } = await admin.from('stores').insert(baseRow).select().single())
   }
+  // New stores start with a 14-day Pro trial (column added by supabase-migration-platform-admin.sql)
+  if (store && !storeError) {
+    await admin.from('stores').update({ trial_ends_at: new Date(Date.now() + 14 * 86400_000).toISOString() }).eq('id', store.id)
+  }
 
   if (storeError) {
     const message = storeError.code === '23505'

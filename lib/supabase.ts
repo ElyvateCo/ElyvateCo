@@ -6,19 +6,32 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 // Server-side / shared read-only client (no auth session)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Browser client — singleton, keeps auth session in localStorage
-let _browserClient: SupabaseClient | null = null
+// Shopper (customer) browser client. The login is kept PER STORE: being logged
+// in on one store never logs you in on another — even when both are opened on
+// the same address (e.g. the shared Vercel preview, /?store=name).
+const _browserClients = new Map<string, SupabaseClient>()
+
+function shopperStorageKey(): string {
+  if (typeof window === 'undefined') return 'elyvate-shopper'
+  const preview = document.cookie.split('; ').find(c => c.startsWith('elyvate_preview_store='))?.split('=')[1] || ''
+  return `elyvate-shopper:${window.location.host}:${preview}`
+}
+
 export function supabaseBrowser(): SupabaseClient {
-  if (!_browserClient) {
-    _browserClient = createClient(supabaseUrl, supabaseAnonKey, {
+  const key = shopperStorageKey()
+  let client = _browserClients.get(key)
+  if (!client) {
+    client = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
+        storageKey: key,
       },
     })
+    _browserClients.set(key, client)
   }
-  return _browserClient
+  return client
 }
 
 // Server-side admin client (never expose to frontend)

@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
 import { checkLink } from '@/lib/mediaLinks'
 import { stripProtected } from '@/lib/stripProtected'
+import { requireFeature } from '@/lib/plans'
 
 export async function PUT(req: NextRequest) {
   const store = await getOwnedStore()
@@ -26,7 +27,16 @@ export async function PUT(req: NextRequest) {
   }
   const db = supabaseAdmin()
 
-  const { data: existing } = await db.from('hero_section').select('id').eq('store_id', store.id).maybeSingle()
+  const { data: existing } = await db.from('hero_section').select('id, bg_video, bg_video_mobile').eq('store_id', store.id).maybeSingle()
+
+  // Plan check: a locked feature can't be newly set (leaving a saved value alone is fine)
+  for (const k of ['bg_video', 'bg_video_mobile'] as const) {
+    if (typeof body[k] === 'string' && body[k].trim() && body[k] !== existing?.[k]) {
+      const locked = await requireFeature(store, 'hero_video')
+      if (locked) return locked
+      break
+    }
+  }
 
   const result = existing?.id
     ? await db.from('hero_section').update(body).eq('id', existing.id).select().single()

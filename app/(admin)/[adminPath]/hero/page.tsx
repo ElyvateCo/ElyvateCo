@@ -79,7 +79,7 @@ export default function AdminHero() {
             <label className="label">Subheadline</label>
             <textarea
               className="input resize-none min-h-[80px]"
-              placeholder="Premium ambient lighting..."
+              placeholder="A short line about your store"
               value={hero.subheadline ?? ''}
               onChange={e => setHero(h => ({ ...h, subheadline: e.target.value }))}
             />

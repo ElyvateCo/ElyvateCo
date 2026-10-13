@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
 import { validateAdminPath } from '@/lib/adminPath'
+import { requireFeature } from '@/lib/plans'
 
 // Lets a merchant rename their admin panel address (stored in Supabase).
 export async function PUT(req: NextRequest) {
   const store = await getOwnedStore()
   if (!store) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const locked = await requireFeature(store, 'admin_rename')
+  if (locked) return locked
 
   const body = await req.json().catch(() => ({}))
   const check = validateAdminPath(body.adminPath)

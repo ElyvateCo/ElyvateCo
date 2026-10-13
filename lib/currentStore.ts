@@ -10,6 +10,8 @@ export type CurrentStore = {
   subdomain: string
   custom_domain: string | null
   admin_path?: string | null
+  status?: string | null
+  trial_ends_at?: string | null
   plan: 'free' | 'premium'
 }
 
@@ -38,7 +40,7 @@ const BASE_COLS = 'id, store_name, subdomain, custom_domain, plan'
 // the storefront keeps working instead of showing "Store not found".
 async function findStore(field: 'subdomain' | 'custom_domain', value: string): Promise<CurrentStore | null> {
   const db = supabaseAdmin()
-  const first = await db.from('stores').select(`${BASE_COLS}, admin_path`).eq(field, value).maybeSingle()
+  const first = await db.from('stores').select(`${BASE_COLS}, admin_path, status, trial_ends_at`).eq(field, value).maybeSingle()
   if (!first.error) return (first.data as CurrentStore | null) ?? null
   const second = await db.from('stores').select(BASE_COLS).eq(field, value).maybeSingle()
   return (second.data as CurrentStore | null) ?? null
@@ -90,5 +92,7 @@ export const getCurrentStore = cache(async (): Promise<CurrentStore | null> => {
 export async function requireCurrentStore(): Promise<CurrentStore> {
   const store = await getCurrentStore()
   if (!store) notFound()
+  // A suspended store shows the "unavailable" page (see app/not-found.tsx)
+  if (store.status === 'suspended') notFound()
   return store
 }

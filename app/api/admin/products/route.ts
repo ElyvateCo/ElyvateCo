@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
 import { parseHttpsUrl, parseUrlList } from '@/lib/mediaLinks'
 import { stripProtected } from '@/lib/stripProtected'
+import { requireRoom } from '@/lib/plans'
 
 // Photos/videos are LINKS pasted by the merchant — keep only valid https links.
 function cleanMedia(body: Record<string, unknown>) {
@@ -26,9 +27,13 @@ export async function POST(req: NextRequest) {
   const store = await getOwnedStore()
   if (!store) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const db = supabaseAdmin()
+  const { count } = await db.from('products').select('id', { count: 'exact', head: true }).eq('store_id', store.id)
+  const full = await requireRoom(store, 'products_limit', count ?? 0)
+  if (full) return full
+
   const body = cleanMedia(await req.json())
   delete body.id
-  const db = supabaseAdmin()
   const { data, error } = await db.from('products').insert({ ...body, store_id: store.id }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

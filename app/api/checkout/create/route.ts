@@ -5,6 +5,7 @@ import { getCurrentStore } from '@/lib/currentStore'
 import { rateLimit, getIP, limits } from '@/lib/rateLimit'
 import { normalizeBDPhone } from '@/lib/phone'
 import { getRequestOrigin } from '@/lib/requestOrigin'
+import { featureAllowed } from '@/lib/plans'
 import { loadGatewayCreds } from '@/lib/gateways/credentials'
 import { bkashCreatePayment, type BkashCreds } from '@/lib/gateways/bkash'
 import { nagadCreatePayment, type NagadCreds } from '@/lib/gateways/nagad'
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
     // from anything in the request body.
     const store = await getCurrentStore()
     if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
+    if (store.status === 'suspended') return NextResponse.json({ error: 'This store is currently unavailable' }, { status: 403 })
 
     const db = supabaseAdmin()
 
@@ -109,6 +111,9 @@ export async function POST(req: NextRequest) {
       const on = provider === 'bkash' ? settings?.bkash_auto_enabled : settings?.nagad_auto_enabled
       if (!on) {
         return NextResponse.json({ error: `Online ${provider === 'bkash' ? 'bKash' : 'Nagad'} payment is not available at this store` }, { status: 400 })
+      }
+      if (!(await featureAllowed(store, 'auto_payments')).allowed) {
+        return NextResponse.json({ error: 'Online payment is not available at this store right now' }, { status: 400 })
       }
       autoProvider = provider
     } else if (paymentMethod === 'crypto_usdt') {

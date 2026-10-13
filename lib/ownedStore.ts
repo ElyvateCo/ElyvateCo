@@ -9,7 +9,9 @@ export type OwnedStore = {
   subdomain: string
   admin_path: string
   custom_domain?: string | null
-  plan: 'free' | 'premium'
+  plan: 'free' | 'pro' | 'business'
+  trial_ends_at?: string | null
+  status?: 'active' | 'suspended'
   business_category?: string | null
   // undefined until the onboarding migration has been run — treat only an
   // explicit `false` as "still needs onboarding"

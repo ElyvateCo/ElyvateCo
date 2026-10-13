@@ -120,7 +120,7 @@ export default function AdminCategories() {
                 <label className="label">Category Name *</label>
                 <input
                   className="input"
-                  placeholder="e.g. Ambient Lighting"
+                  placeholder="e.g. Fashion"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 />

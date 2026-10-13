@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
 import { encryptJson, decryptJson, secretBoxReady } from '@/lib/secretBox'
 import { normalizeBDPhone } from '@/lib/phone'
+import { requireFeature } from '@/lib/plans'
 import { bkashGrantToken, type BkashCreds, type GatewayMode } from '@/lib/gateways/bkash'
 import { assertNagadKeys, type NagadCreds } from '@/lib/gateways/nagad'
 
@@ -44,6 +45,8 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   const store = await getOwnedStore()
   if (!store) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const locked = await requireFeature(store, 'auto_payments')
+  if (locked) return locked
   if (!secretBoxReady()) {
     return NextResponse.json({ error: 'Online payments are not switched on for the platform yet (PAYMENT_SECRET_KEY is missing on the server).' }, { status: 503 })
   }

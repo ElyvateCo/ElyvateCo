@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { validateSubdomain } from '@/lib/reservedSubdomains'
 import { getIP } from '@/lib/rateLimit'
 import { hit } from '@/lib/rateLimitDb'
+import { isPlatformAdminEmail } from '@/lib/platformAdmin'
 
 // Creates a merchant account that is ALREADY confirmed, so signing up works
 // even before email sending (SMTP) is set up — Supabase's built-in email
@@ -26,6 +27,10 @@ export async function POST(req: NextRequest) {
   const password = typeof body.password === 'string' ? body.password : ''
   const storeName = typeof body.storeName === 'string' ? body.storeName.replace(/[<>]/g, '').trim().slice(0, 80) : ''
 
+  // The platform owner's account is created by hand in Supabase — nobody can sign up with that email
+  if (isPlatformAdminEmail(email)) {
+    return NextResponse.json({ error: 'This email address cannot be used to sign up.' }, { status: 403 })
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) {
     return NextResponse.json({ error: 'Please enter a valid email address' }, { status: 400 })
   }

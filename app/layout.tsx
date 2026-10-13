@@ -21,8 +21,8 @@ const dmSans = DM_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'Elyvate — Elevate Your Space',
-  description: 'Premium ambient lighting and projection gadgets for your home.',
+  title: 'Elyvate — Build your online store in minutes',
+  description: 'Open your online store in minutes. Sell with Cash on Delivery, bKash and Nagad. Built for sellers in Bangladesh.',
   icons: { icon: '/favicon.ico' },
 }
 

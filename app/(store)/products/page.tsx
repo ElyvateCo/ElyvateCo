@@ -8,8 +8,8 @@ import ProductGrid from '@/components/store/ProductGrid'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'All Products — Elyvate',
-  description: 'Shop our full collection of ambient lighting and projection gadgets. Free worldwide shipping, 30-day returns.',
+  title: 'All Products',
+  description: 'Browse our full collection.',
 }
 
 export default async function ProductsPage({ searchParams }: { searchParams: { category?: string } }) {

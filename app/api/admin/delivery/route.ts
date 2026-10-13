@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
+import { requireRoom } from '@/lib/plans'
 
 // Delivery areas and charges, edited by the merchant (stored in Supabase).
 // e.g. "Inside Dhaka" ৳60, "Outside Dhaka" ৳120 — optionally free above an amount.
@@ -39,6 +40,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const store = await getOwnedStore()
   if (!store) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { count } = await supabaseAdmin().from('delivery_zones').select('id', { count: 'exact', head: true }).eq('store_id', store.id)
+  const full = await requireRoom(store, 'delivery_zones_limit', count ?? 0)
+  if (full) return full
   const c = clean(await req.json().catch(() => ({})))
   if (!c.value) return NextResponse.json({ error: c.error }, { status: 400 })
   const { data, error } = await supabaseAdmin().from('delivery_zones').insert({ ...c.value, store_id: store.id }).select().single()

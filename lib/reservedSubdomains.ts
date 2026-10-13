@@ -9,7 +9,7 @@ export const RESERVED_SUBDOMAINS = new Set([
   'staging', 'stage', 'dev', 'test', 'demo', 'preview', 'beta', 'sandbox',
   'shop', 'store', 'stores', 'checkout', 'pay', 'payment', 'payments', 'billing',
   'bkash', 'nagad', 'nogod', 'rocket', 'upay', 'sslcommerz', 'shopify',
-  'elyvate', 'elyvateco', 'official', 'security', 'root', 'system', 'null', 'undefined',
+  'elyvate', 'elyvateco', 'rafiixr', 'official', 'security', 'root', 'system', 'null', 'undefined',
 ])
 
 export type SubdomainCheck = { ok: true; value: string } | { ok: false; error: string }

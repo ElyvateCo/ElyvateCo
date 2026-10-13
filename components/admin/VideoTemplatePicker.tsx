@@ -8,14 +8,23 @@ type Template = { id: string; title: string; video_url: string; thumbnail_url: s
 // the merchant still presses Save like normal.
 export default function VideoTemplatePicker({ current, onPick }: { current?: string | null; onPick: (url: string) => void }) {
   const [templates, setTemplates] = useState<Template[]>([])
+  const [locked, setLocked] = useState(false)
 
   useEffect(() => {
     fetch('/api/admin/video-templates')
       .then(r => (r.ok ? r.json() : []))
-      .then(d => { if (Array.isArray(d)) setTemplates(d) })
+      .then(d => { if (Array.isArray(d)) setTemplates(d); else if (d?.locked) setLocked(true) })
       .catch(() => {})
   }, [])
 
+  if (locked) {
+    return (
+      <div className="mb-4 bg-brand-50 border border-brand-100 rounded-2xl p-4">
+        <p className="text-sm font-semibold text-ink-primary flex items-center gap-2"><Film size={14} /> Ready-made videos</p>
+        <p className="text-xs text-ink-secondary mt-1">Pick a ready-made background video with the Pro plan. Upgrade to unlock it.</p>
+      </div>
+    )
+  }
   if (templates.length === 0) return null
 
   return (

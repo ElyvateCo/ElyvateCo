@@ -14,6 +14,17 @@ export default async function NotFound() {
   const store = await getCurrentStore()
   if (!store) return <StoreNotFound />
 
+  if (store.status === 'suspended') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-50 section-pad">
+        <div className="card p-8 w-full max-w-md text-center">
+          <h1 className="font-display text-2xl font-semibold mb-2">This store is unavailable</h1>
+          <p className="text-sm text-ink-secondary">{store.store_name} is temporarily closed. Please check back later.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-50 section-pad">
       <div className="card p-8 w-full max-w-md text-center">

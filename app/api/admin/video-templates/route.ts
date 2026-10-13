@@ -2,12 +2,16 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
 import { parseHttpsUrl } from '@/lib/mediaLinks'
+import { featureAllowed } from '@/lib/plans'
 
 // Ready-made background videos (added by the platform owner in Supabase),
 // offered to every merchant in Admin -> Hero.
 export async function GET() {
   const store = await getOwnedStore()
   if (!store) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const access = await featureAllowed(store, 'video_templates')
+  if (!access.allowed) return NextResponse.json({ locked: true, minPlan: access.minPlan })
 
   const { data, error } = await supabaseAdmin()
     .from('video_templates')

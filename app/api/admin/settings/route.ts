@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
 import { checkLink } from '@/lib/mediaLinks'
 import { stripProtected } from '@/lib/stripProtected'
+import { requireFeature } from '@/lib/plans'
 import { normalizeBDPhone } from '@/lib/phone'
 
 export async function PUT(req: NextRequest) {
@@ -49,7 +50,13 @@ export async function PUT(req: NextRequest) {
   }
   const db = supabaseAdmin()
 
-  const { data: existing } = await db.from('site_settings').select('id').eq('store_id', store.id).maybeSingle()
+  const { data: existing } = await db.from('site_settings').select('id, custom_font_url').eq('store_id', store.id).maybeSingle()
+
+  // Plan check: a locked feature can't be newly set (leaving a saved value alone is fine)
+  if (typeof body.custom_font_url === 'string' && body.custom_font_url.trim() && body.custom_font_url !== existing?.custom_font_url) {
+    const locked = await requireFeature(store, 'custom_font')
+    if (locked) return locked
+  }
 
   // If the database lacks an optional column (a migration wasn't run), drop just
   // that field and save the rest — instead of failing the whole save.

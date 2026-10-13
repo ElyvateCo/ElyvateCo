@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOwnedStore } from '@/lib/ownedStore'
+import { requireRoom } from '@/lib/plans'
 
 function unauthorized() {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -28,6 +29,10 @@ export async function POST(req: NextRequest) {
   if (!store) return unauthorized()
 
   try {
+    const { count } = await supabaseAdmin().from('coupons').select('id', { count: 'exact', head: true }).eq('store_id', store.id)
+    const full = await requireRoom(store, 'coupons_limit', count ?? 0)
+    if (full) return full
+
     const body = await req.json()
     const { code, type, value, min_order, usage_limit, expires_at, is_active } = body
 

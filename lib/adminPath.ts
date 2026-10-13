@@ -7,7 +7,7 @@ export const RESERVED_ADMIN_PATHS = new Set([
   'api', 'auth', 'login', 'signup', 'forgot-password', 'reset-password', 'onboarding',
   'welcome', 'go-admin', 'account', 'cart', 'checkout', 'contact', 'notifications',
   'order-success', 'products', 'track-order', 'wishlist', 'search', 'about',
-  'privacy-policy', 'terms', 'returns-policy', 'shipping-policy', 'faq',
+  'rafiixr', 'privacy-policy', 'terms', 'returns-policy', 'shipping-policy', 'faq',
   // files / framework
   '_next', 'static', 'public', 'favicon.ico', 'robots.txt', 'sitemap.xml', 'manifest.json',
   'error', 'not-found', 'sitemap', 'robots',

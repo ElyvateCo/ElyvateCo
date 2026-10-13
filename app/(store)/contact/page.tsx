@@ -88,10 +88,6 @@ export default function ContactPage() {
                 : <><Send size={15} /> Send Message</>
               }
             </button>
-            <p className="text-xs text-ink-muted text-center">
-              Or email us directly at{' '}
-              <a href="mailto:support@elyvate.com" className="text-brand-600 hover:underline">support@elyvate.com</a>
-            </p>
           </form>
         </div>
       </div>

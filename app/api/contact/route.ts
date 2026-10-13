@@ -73,7 +73,8 @@ export async function POST(req: NextRequest) {
         // Email to you (store owner)
         const adminSend = await resend.emails.send({
           from:    fromEmail,
-          to:      ownerEmail ?? 'support@elyvate.com',
+          // Never fall back to an address we don't own — set SUPPORT_EMAIL in Vercel if you want a platform inbox
+          to:      ownerEmail ?? process.env.SUPPORT_EMAIL ?? '',
           subject: `New Contact Message from ${name}`,
           html: `
             <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px">
