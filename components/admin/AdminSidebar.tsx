@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Package, ShoppingBag, Image as ImageIcon, Settings, Tag, Star, Mail, FolderTree, Bell, AlertTriangle, Truck, CreditCard, Users } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingBag, Image as ImageIcon, Settings, Tag, Star, Mail, FolderTree, Bell, AlertTriangle, Truck, CreditCard, Users, ShieldCheck } from 'lucide-react'
 import { useAdminPath } from './AdminPathContext'
 
 // Paths are relative to the admin address (which each merchant can rename)
@@ -12,6 +12,7 @@ const nav = [
   { rel: '/categories',    icon: FolderTree,      label: 'Categories'  },
   { rel: '/orders',        icon: ShoppingBag,     label: 'Orders'      },
   { rel: '/customers',     icon: Users,           label: 'Customers'   },
+  { rel: '/fraud-check',   icon: ShieldCheck,     label: 'Fraud check' },
   { rel: '/delivery',      icon: Truck,           label: 'Delivery'    },
   { rel: '/payments',      icon: CreditCard,      label: 'Online Payments' },
   { rel: '/coupons',       icon: Tag,             label: 'Coupons'     },

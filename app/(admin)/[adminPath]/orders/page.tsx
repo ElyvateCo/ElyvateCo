@@ -1,4 +1,5 @@
 'use client'
+import FraudCheck from '@/components/admin/FraudCheck'
 import { formatPrice } from '@/lib/money'
 import { useEffect, useState } from 'react'
 import type { Order } from '@/lib/supabase'
@@ -221,6 +222,7 @@ export default function AdminOrders() {
                           <p className="text-ink-secondary">Total: <span className="text-ink-primary font-bold">{formatPrice(o.total_price)}</span></p>
                           {o.coupon_code && <p className="text-green-600 text-xs">Coupon: {o.coupon_code}</p>}
                           {o.customer_phone && <p className="text-ink-secondary">Phone: <a href={`tel:${o.customer_phone}`} className="text-brand-600 font-medium">{o.customer_phone}</a></p>}
+                          {o.customer_phone && <FraudCheck phone={o.customer_phone} />}
                           {o.payment_method === 'cod' && (
                             <div className="mt-2 p-2.5 bg-blue-50 border border-blue-200 rounded-xl">
                               <p className="text-blue-800 font-semibold text-xs mb-1">Cash on Delivery</p>

@@ -8,6 +8,7 @@ const NAV = [
   { href: '/rafiixr', label: 'Overview' },
   { href: '/rafiixr/stores', label: 'Stores' },
   { href: '/rafiixr/plans', label: 'Plans & features' },
+  { href: '/rafiixr/fraud', label: 'Fraud check' },
 ]
 
 export default function PanelShell({ email, children }: { email: string; children: React.ReactNode }) {

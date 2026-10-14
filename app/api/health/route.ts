@@ -19,6 +19,7 @@ const DB_CHECKS: { label: string; table: string; columns: string; fix: string }[
   { label: 'store_customers table',          table: 'store_customers',      columns: 'id, store_id, user_id',                        fix: 'run supabase-migration-customers.sql' },
   { label: 'plan_features table',            table: 'plan_features',        columns: 'key, min_plan',                                fix: 'run supabase-migration-platform-admin.sql' },
   { label: 'stores plan/status/trial',        table: 'stores',               columns: 'status, trial_ends_at',                        fix: 'run supabase-migration-platform-admin.sql' },
+  { label: 'fraud_checks tables',            table: 'fraud_checks',         columns: 'id, store_id, live',                           fix: 'run supabase-migration-fraud-check.sql' },
   { label: 'delivery_zones table',            table: 'delivery_zones',       columns: 'id, store_id, charge',                         fix: 'run supabase-migration-gateways-delivery-admin.sql' },
   { label: 'store_gateway_secrets table',     table: 'store_gateway_secrets', columns: 'id, store_id, credentials_encrypted',         fix: 'run supabase-migration-gateways-delivery-admin.sql' },
 ]
@@ -31,6 +32,7 @@ export async function GET(req: Request) {
     SUPABASE_SERVICE_ROLE_KEY:     !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     PAYMENT_SECRET_KEY:            secretBoxReady(),
     RESEND_API_KEY:                !!process.env.RESEND_API_KEY,
+    FRAUD_API_KEY:                 !!process.env.FRAUD_API_KEY,
     NEXT_PUBLIC_ROOT_DOMAIN:       ROOT_DOMAIN || '(none — fine until you connect your own domain; a vercel.app value is ignored)',
   }
 
