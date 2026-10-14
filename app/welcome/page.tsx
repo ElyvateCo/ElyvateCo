@@ -5,7 +5,9 @@ import {
   Store, LayoutDashboard, Wallet, Globe, Smartphone, Palette,
   ArrowRight, Check, ChevronDown,
 } from 'lucide-react'
-import StoreNameDemo from '@/components/landing/StoreNameDemo'
+import HeroArt from '@/components/landing/HeroArt'
+import LiveStoreDemo from '@/components/landing/LiveStoreDemo'
+import HowItWorks from '@/components/landing/HowItWorks'
 import { supabaseServer } from '@/lib/supabase-server'
 import { getOwnedStore } from '@/lib/ownedStore'
 
@@ -129,8 +131,9 @@ export default async function PlatformLandingPage() {
       </header>
 
       {/* ── Hero ────────────────────────────────────────────────── */}
-      <section className="section-pad pt-16 pb-20 md:pt-24 md:pb-28 bg-gradient-to-b from-brand-50/60 to-transparent">
-        <div className="container-xl max-w-3xl text-center">
+      <section className="relative overflow-hidden section-pad pt-16 pb-20 md:pt-24 md:pb-28 bg-gradient-to-b from-brand-50/60 to-transparent">
+        <HeroArt />
+        <div className="relative z-10 container-xl max-w-3xl text-center">
           <span className="inline-block text-xs font-semibold bg-white text-brand-700 border border-brand-100 px-3 py-1 rounded-full mb-6">
             Built for sellers in Bangladesh
           </span>
@@ -152,9 +155,7 @@ export default async function PlatformLandingPage() {
                   See how it works
                 </a>
               </div>
-            ) : (
-              <StoreNameDemo rootDomain={ROOT_DOMAIN || 'elyvateco.com'} />
-            )}
+            ) : null}
           </div>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-2 text-xs text-ink-secondary">
@@ -165,6 +166,12 @@ export default async function PlatformLandingPage() {
           </div>
           <p className="mt-4 text-xs text-ink-muted">Free to start. No credit card needed.</p>
         </div>
+
+        {!store && (
+          <div className="relative z-10 container-xl max-w-4xl mt-14">
+            <LiveStoreDemo rootDomain={ROOT_DOMAIN || 'elyvateco.com'} />
+          </div>
+        )}
       </section>
 
       {/* ── Features ────────────────────────────────────────────── */}
@@ -202,17 +209,7 @@ export default async function PlatformLandingPage() {
           <h2 className="font-display text-3xl md:text-4xl font-semibold text-center mb-12">
             Three steps to your first sale
           </h2>
-          <div className="grid gap-8 md:grid-cols-3">
-            {STEPS.map(s => (
-              <div key={s.n} className="text-center md:text-left">
-                <div className="w-10 h-10 rounded-full bg-brand-600 text-white font-semibold flex items-center justify-center mx-auto md:mx-0 mb-4">
-                  {s.n}
-                </div>
-                <h3 className="font-semibold mb-1.5">{s.title}</h3>
-                <p className="text-sm text-ink-secondary leading-relaxed">{s.text}</p>
-              </div>
-            ))}
-          </div>
+          <HowItWorks steps={STEPS} />
         </div>
       </section>
 
