@@ -71,6 +71,57 @@ function FeatureCard({ f, onSaved }: { f: Feature; onSaved: () => void }) {
   )
 }
 
+function TrialCard() {
+  const [enabled, setEnabled] = useState(false)
+  const [days, setDays] = useState('14')
+  const [ready, setReady] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    fetchJson('/api/rafiixr/settings').then(r => {
+      const t = r.data.trial as { enabled: boolean; days: number } | undefined
+      if (r.ok && t) { setEnabled(t.enabled); setDays(String(t.days)); setReady(true) }
+    })
+  }, [])
+
+  async function save(next: { enabled?: boolean; days?: string }) {
+    setBusy(true)
+    const r = await fetchJson('/api/rafiixr/settings', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: next.enabled ?? enabled, days: next.days ?? days }),
+    })
+    setBusy(false)
+    if (!r.ok) { toast.error(String(r.data.error || 'Could not save')); return }
+    if (next.enabled !== undefined) setEnabled(next.enabled)
+    toast.success(next.enabled !== undefined ? (next.enabled ? 'Free trial is ON' : 'Free trial is OFF') : 'Trial length saved')
+  }
+
+  if (!ready) return null
+  return (
+    <div className={`rounded-2xl shadow-card p-4 mb-5 border-2 ${enabled ? 'bg-green-50 border-green-200' : 'bg-white border-surface-200'}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="font-semibold">Free trial · {enabled ? 'ON' : 'OFF'}</p>
+          <p className="text-xs text-ink-secondary mt-0.5">
+            {enabled ? 'Every new store starts a Pro trial, and stores with an active trial get Pro features.' : 'New stores get no trial, and trials give no Pro features.'}
+          </p>
+        </div>
+        <button onClick={() => save({ enabled: !enabled })} disabled={busy}
+          className={`shrink-0 px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-60 ${enabled ? 'bg-white text-red-600 border border-red-200' : 'bg-brand-600 text-white'}`}>
+          {enabled ? 'Turn OFF' : 'Turn ON'}
+        </button>
+      </div>
+      <div className="flex items-end gap-2 mt-3">
+        <div>
+          <label className="label">Trial length (days)</label>
+          <input className="input !w-28" type="number" min="1" max="365" value={days} onChange={e => setDays(e.target.value)} />
+        </div>
+        <button onClick={() => save({ days })} disabled={busy} className="btn-outline !px-4 !py-2.5 text-sm">Save</button>
+      </div>
+    </div>
+  )
+}
+
 export default function PlansPage() {
   const [features, setFeatures] = useState<Feature[]>([])
   const [loading, setLoading] = useState(true)
@@ -88,8 +139,8 @@ export default function PlansPage() {
       <h1 className="font-display text-2xl font-semibold mb-1">Plans &amp; features</h1>
       <p className="text-sm text-ink-secondary mb-5">
         Choose what each plan gets. Changes apply to every store within seconds. Leave a limit empty for unlimited.
-        A store on its 14-day trial gets Pro features.
       </p>
+      <TrialCard />
       {loading ? (
         <div className="w-8 h-8 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
       ) : (

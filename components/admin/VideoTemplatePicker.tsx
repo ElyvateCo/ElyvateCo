@@ -9,6 +9,7 @@ type Template = { id: string; title: string; video_url: string; thumbnail_url: s
 export default function VideoTemplatePicker({ current, onPick }: { current?: string | null; onPick: (url: string) => void }) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [locked, setLocked] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     fetch('/api/admin/video-templates')
@@ -54,7 +55,29 @@ export default function VideoTemplatePicker({ current, onPick }: { current?: str
           )
         })}
       </div>
-      <p className="text-xs text-ink-muted mt-2">Tap a video, then press Save at the bottom.</p>
+      {(() => {
+        const picked = templates.find(t => t.video_url === current)
+        if (!picked) return <p className="text-xs text-ink-muted mt-2">Tap a video, then press Save at the bottom.</p>
+        return (
+          <div className="mt-3 bg-brand-50 border border-brand-100 rounded-2xl p-3">
+            <p className="text-xs font-semibold text-ink-primary mb-1.5">Selected: {picked.title}</p>
+            <div className="flex gap-2">
+              <input readOnly value={picked.video_url} onFocus={e => e.currentTarget.select()} className="input !py-2 text-xs" aria-label="Video link" />
+              <button
+                type="button"
+                onClick={async () => {
+                  try { await navigator.clipboard.writeText(picked.video_url) } catch { /* the link is selected on tap — copy manually */ }
+                  setCopied(true); setTimeout(() => setCopied(false), 1800)
+                }}
+                className="btn-outline !px-4 !py-2 text-xs shrink-0"
+              >
+                {copied ? 'Copied ✓' : 'Copy link'}
+              </button>
+            </div>
+            <p className="text-[11px] text-ink-muted mt-1.5">Press Save at the bottom to use this video.</p>
+          </div>
+        )
+      })()}
     </div>
   )
 }

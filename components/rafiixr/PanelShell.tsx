@@ -8,6 +8,8 @@ const NAV = [
   { href: '/rafiixr', label: 'Overview' },
   { href: '/rafiixr/stores', label: 'Stores' },
   { href: '/rafiixr/plans', label: 'Plans & features' },
+  { href: '/rafiixr/landing', label: 'Landing page' },
+  { href: '/rafiixr/videos', label: 'Videos' },
   { href: '/rafiixr/fraud', label: 'Fraud check' },
 ]
 

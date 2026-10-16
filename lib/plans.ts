@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { DEFAULT_FEATURES, type Feature, type Plan } from '@/lib/planDefaults'
+import { loadTrialSettings } from '@/lib/platformSettings'
 
 const ORDER: Record<Plan, number> = { free: 0, pro: 1, business: 2 }
 const PLAN_NAME: Record<Plan, string> = { free: 'Free', pro: 'Pro', business: 'Business' }
@@ -27,11 +28,16 @@ export async function loadFeatures(force = false): Promise<Feature[]> {
 
 export function clearFeatureCache() { cache = null }
 
-// A store on its 14-day trial gets Pro features.
-export function effectivePlan(store: StoreLike): Plan {
+// A store with an active trial gets Pro features — but only while the master
+// free-trial switch (main admin → Plans & features) is ON.
+export function effectivePlan(store: StoreLike, trialsOn = false): Plan {
   const plan = (['free', 'pro', 'business'].includes(String(store.plan)) ? store.plan : 'free') as Plan
-  if (plan === 'free' && store.trial_ends_at && new Date(store.trial_ends_at).getTime() > Date.now()) return 'pro'
+  if (trialsOn && plan === 'free' && store.trial_ends_at && new Date(store.trial_ends_at).getTime() > Date.now()) return 'pro'
   return plan
+}
+
+async function planOf(store: StoreLike): Promise<Plan> {
+  return effectivePlan(store, (await loadTrialSettings()).enabled)
 }
 
 export async function getFeature(key: string): Promise<Feature | undefined> {
@@ -42,7 +48,7 @@ export async function getFeature(key: string): Promise<Feature | undefined> {
 export async function featureAllowed(store: StoreLike, key: string): Promise<{ allowed: boolean; minPlan: Plan; label: string }> {
   const f = await getFeature(key)
   if (!f) return { allowed: true, minPlan: 'free', label: key }
-  const allowed = f.enabled && ORDER[effectivePlan(store)] >= ORDER[f.min_plan]
+  const allowed = f.enabled && ORDER[await planOf(store)] >= ORDER[f.min_plan]
   return { allowed, minPlan: f.min_plan, label: f.label }
 }
 
@@ -50,7 +56,7 @@ export async function featureAllowed(store: StoreLike, key: string): Promise<{ a
 export async function limitFor(store: StoreLike, key: string): Promise<{ limit: number | null; label: string }> {
   const f = await getFeature(key)
   if (!f) return { limit: null, label: key }
-  const plan = effectivePlan(store)
+  const plan = await planOf(store)
   const limit = plan === 'free' ? f.free_limit : plan === 'pro' ? f.pro_limit : f.business_limit
   return { limit, label: f.label }
 }
@@ -80,6 +86,6 @@ export async function requireFeature(store: StoreLike, key: string) {
 // current count), or null when there is still room.
 export async function requireRoom(store: StoreLike, key: string, currentCount: number) {
   const { limit, label } = await limitFor(store, key)
-  if (limit !== null && currentCount >= limit) return limitResponse(label, limit, effectivePlan(store))
+  if (limit !== null && currentCount >= limit) return limitResponse(label, limit, await planOf(store))
   return null
 }

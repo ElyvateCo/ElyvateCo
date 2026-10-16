@@ -11,12 +11,16 @@ type Store = {
 
 export default function StoresPage() {
   const [stores, setStores] = useState<Store[]>([])
+  const [trial, setTrial] = useState<{ enabled: boolean; days: number }>({ enabled: false, days: 14 })
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
 
   async function load() {
     const r = await fetchJson('/api/rafiixr/stores')
-    if (r.ok && Array.isArray(r.data)) setStores(r.data as unknown as Store[])
+    if (r.ok && Array.isArray(r.data.stores)) {
+      setStores(r.data.stores as Store[])
+      setTrial(r.data.trial as { enabled: boolean; days: number })
+    }
     setLoading(false)
   }
   useEffect(() => { load() }, [])
@@ -32,12 +36,15 @@ export default function StoresPage() {
 
   const needle = q.trim().toLowerCase()
   const shown = needle ? stores.filter(s => [s.name, s.subdomain, s.owner].some(v => v.toLowerCase().includes(needle))) : stores
-  const onTrial = (s: Store) => s.plan === 'free' && s.trialEndsAt && new Date(s.trialEndsAt).getTime() > Date.now()
+  const onTrial = (s: Store) => trial.enabled && s.plan === 'free' && s.trialEndsAt && new Date(s.trialEndsAt).getTime() > Date.now()
 
   return (
     <div>
       <h1 className="font-display text-2xl font-semibold mb-1">Stores</h1>
-      <p className="text-sm text-ink-secondary mb-4">{stores.length} stores on Elyvate.</p>
+      <p className="text-sm text-ink-secondary mb-4">
+        {stores.length} stores on Elyvate. Free trial is <span className="font-semibold">{trial.enabled ? 'ON' : 'OFF'}</span>
+        {!trial.enabled && ' — trials give no Pro features. Turn it on in Plans & features.'}
+      </p>
 
       <div className="relative mb-4">
         <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-muted" />
@@ -67,8 +74,8 @@ export default function StoresPage() {
                 </select>
                 {onTrial(s) && <span className="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-1 rounded-full">Pro trial until {new Date(s.trialEndsAt as string).toLocaleDateString()}</span>}
                 {s.status === 'suspended' && <span className="text-[11px] font-semibold bg-red-100 text-red-700 px-2 py-1 rounded-full">Suspended</span>}
-                <button onClick={() => change(s.id, { trialDays: onTrial(s) ? 0 : 14 }, onTrial(s) ? 'Trial ended' : '14-day Pro trial started')} className="text-xs px-3 py-2 rounded-xl bg-surface-100 hover:bg-surface-200">
-                  {onTrial(s) ? 'End trial' : 'Give 14-day trial'}
+                <button onClick={() => change(s.id, { trialDays: onTrial(s) ? 0 : trial.days }, onTrial(s) ? 'Trial ended' : `${trial.days}-day Pro trial started`)} className="text-xs px-3 py-2 rounded-xl bg-surface-100 hover:bg-surface-200">
+                  {onTrial(s) ? 'End trial' : `Give ${trial.days}-day trial`}
                 </button>
                 <button
                   onClick={() => {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServer } from '@/lib/supabase-server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { validateSubdomain } from '@/lib/reservedSubdomains'
+import { loadTrialSettings } from '@/lib/platformSettings'
 
 async function createStore(req: NextRequest) {
   // Who's asking, verified from their cookie session — never trust a
@@ -49,9 +50,12 @@ async function createStore(req: NextRequest) {
   if (storeError && /admin_path/.test(storeError.message)) {
     ;({ data: store, error: storeError } = await admin.from('stores').insert(baseRow).select().single())
   }
-  // New stores start with a 14-day Pro trial (column added by supabase-migration-platform-admin.sql)
+  // A free trial is only given while the master switch (main admin → Plans & features) is ON
   if (store && !storeError) {
-    await admin.from('stores').update({ trial_ends_at: new Date(Date.now() + 14 * 86400_000).toISOString() }).eq('id', store.id)
+    const trial = await loadTrialSettings()
+    if (trial.enabled) {
+      await admin.from('stores').update({ trial_ends_at: new Date(Date.now() + trial.days * 86400_000).toISOString() }).eq('id', store.id)
+    }
   }
 
   if (storeError) {

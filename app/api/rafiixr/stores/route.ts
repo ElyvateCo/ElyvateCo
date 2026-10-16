@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getPlatformAdmin, ownerEmailMap } from '@/lib/platformAdmin'
 import { getPublicStoreUrl } from '@/lib/storeUrl'
+import { loadTrialSettings } from '@/lib/platformSettings'
 
 export const dynamic = 'force-dynamic'
 const notFound = () => NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -24,7 +25,8 @@ export async function GET() {
   }
   const pc = tally(products.data), oc = tally(orders.data)
 
-  return NextResponse.json((stores.data ?? []).map(s => ({
+  const trial = await loadTrialSettings()
+  const list = (stores.data ?? []).map(s => ({
     id: s.id,
     name: s.store_name,
     subdomain: s.subdomain,
@@ -36,7 +38,8 @@ export async function GET() {
     products: pc.get(s.id) ?? 0,
     orders: oc.get(s.id) ?? 0,
     url: getPublicStoreUrl(s.subdomain),
-  })))
+  }))
+  return NextResponse.json({ stores: list, trial })
 }
 
 // Change a store's plan, suspend / reactivate it, or set its trial.

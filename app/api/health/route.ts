@@ -20,6 +20,8 @@ const DB_CHECKS: { label: string; table: string; columns: string; fix: string }[
   { label: 'plan_features table',            table: 'plan_features',        columns: 'key, min_plan',                                fix: 'run supabase-migration-platform-admin.sql' },
   { label: 'stores plan/status/trial',        table: 'stores',               columns: 'status, trial_ends_at',                        fix: 'run supabase-migration-platform-admin.sql' },
   { label: 'fraud_checks tables',            table: 'fraud_checks',         columns: 'id, store_id, live',                           fix: 'run supabase-migration-fraud-check.sql' },
+  { label: 'platform_settings + landing_content', table: 'platform_settings', columns: 'key, value',                                fix: 'run supabase-migration-round3.sql' },
+  { label: 'video_templates table',           table: 'video_templates',      columns: 'id, title, video_url',                         fix: 'run supabase-migration-video-templates.sql' },
   { label: 'delivery_zones table',            table: 'delivery_zones',       columns: 'id, store_id, charge',                         fix: 'run supabase-migration-gateways-delivery-admin.sql' },
   { label: 'store_gateway_secrets table',     table: 'store_gateway_secrets', columns: 'id, store_id, credentials_encrypted',         fix: 'run supabase-migration-gateways-delivery-admin.sql' },
 ]

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getPlatformAdmin, ownerEmailMap } from '@/lib/platformAdmin'
+import { loadTrialSettings } from '@/lib/platformSettings'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,11 +25,12 @@ export async function GET() {
   ])
 
   const now = Date.now()
+  const trialsOn = (await loadTrialSettings()).enabled
   const plans = { free: 0, pro: 0, business: 0, trial: 0, suspended: 0 }
   for (const s of planRows.data ?? []) {
     if (s.plan === 'pro') plans.pro++
     else if (s.plan === 'business') plans.business++
-    else if (s.trial_ends_at && new Date(s.trial_ends_at).getTime() > now) plans.trial++
+    else if (trialsOn && s.trial_ends_at && new Date(s.trial_ends_at).getTime() > now) plans.trial++
     else plans.free++
     if (s.status === 'suspended') plans.suspended++
   }
