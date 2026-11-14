@@ -12,7 +12,7 @@ export type CurrentStore = {
   admin_path?: string | null
   status?: string | null
   trial_ends_at?: string | null
-  plan: 'free' | 'premium'
+  plan: 'free' | 'pro' | 'business'
 }
 
 // Set NEXT_PUBLIC_ROOT_DOMAIN to your platform's domain (e.g. "elyvate.com")

@@ -62,6 +62,9 @@ export async function middleware(req: NextRequest) {
   const cookieStore = onPlatformHost && !clearPreview ? (req.cookies.get(PREVIEW_COOKIE)?.value || '') : ''
   const previewStore = paramStore || (/^[a-z0-9-]{1,30}$/.test(cookieStore) ? cookieStore : null)
   const requestHeaders = new Headers(req.headers)
+  // Never trust this header from the outside: only the middleware may set it.
+  // (Otherwise anyone could send it and make a store's own address act as a different store.)
+  requestHeaders.delete('x-preview-store')
   if (previewStore) requestHeaders.set('x-preview-store', previewStore)
 
   let res = NextResponse.next({ request: { headers: requestHeaders } })

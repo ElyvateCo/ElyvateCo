@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { hit } from '@/lib/rateLimitDb'
 import { sendCheckoutIntentNotification } from '@/lib/resend'
-import { rateLimit, getIP, limits } from '@/lib/rateLimit'
+import { getIP, limits } from '@/lib/rateLimit'
 import { getCurrentStore } from '@/lib/currentStore'
 
 // Fires when a customer clicks "Checkout" on the cart page —
@@ -9,7 +10,7 @@ export async function POST(req: NextRequest) {
   const ip = getIP(req)
   // Reuses the checkout limit (5 per 10 min) — this is a pre-checkout signal,
   // so it should never fire more often than real checkout attempts would.
-  if (!rateLimit(ip, 'checkout-intent', limits.checkout)) {
+  if (!(await hit(`checkout-intent:${ip}`, limits.checkout.max, limits.checkout.windowMs / 1000))) {
     return NextResponse.json({ ok: false }, { status: 200 }) // fail silently, never block UX
   }
 

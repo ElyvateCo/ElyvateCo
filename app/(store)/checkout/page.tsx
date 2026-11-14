@@ -67,6 +67,9 @@ export default function CheckoutPage() {
     address: '', city: '', country: 'Bangladesh', zip: '',
   })
   const submitBtnRef = useRef<HTMLButtonElement>(null)
+  // One key per checkout page: if the same order is sent twice (double tap,
+  // slow network retry) the server returns the first order instead of a copy.
+  const idemKeyRef = useRef('')
   const { burst, layer: emojiLayer } = useEmojiBurst()
 
   // Coupon state
@@ -213,6 +216,11 @@ export default function CheckoutPage() {
   }
 
   async function processPayment(method: PayMethod) {
+    if (!idemKeyRef.current) {
+      idemKeyRef.current = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `k-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+    }
     setShowMethodModal(false)
 
     // Fire the celebration from wherever the actual submit button is, then
@@ -238,6 +246,7 @@ export default function CheckoutPage() {
           discountAmount: appliedCoupon?.discountAmount ?? 0,
           paymentMethod: method,
           deliveryZoneId: zoneId || null,
+          idempotencyKey: idemKeyRef.current,
         }),
       })
       const data = await res.json()

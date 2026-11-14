@@ -68,3 +68,22 @@ export async function bkashExecute(creds: BkashCreds, mode: GatewayMode, payment
     message: String(data?.statusMessage ?? data?.errorMessage ?? ''),
   }
 }
+
+// Asks bKash for a payment's current state WITHOUT trying to take the money.
+// Used by the reconcile job for customers who paid but never came back to us.
+// `known` is false when bKash gave no clear answer (so the caller must not
+// treat "not completed" as "failed").
+export async function bkashQueryStatus(
+  creds: BkashCreds, mode: GatewayMode, paymentID: string,
+): Promise<BkashResult & { known: boolean }> {
+  const token = await bkashGrantToken(creds, mode)
+  const data = await post(mode, '/payment/status', { Authorization: token, 'X-APP-Key': creds.appKey }, { paymentID })
+  const completed = data?.statusCode === '0000' && data?.transactionStatus === 'Completed'
+  return {
+    completed,
+    known: typeof data?.transactionStatus === 'string' && data.transactionStatus.length > 0,
+    trxID: completed ? String(data.trxID ?? '') || null : null,
+    amount: Number(data?.amount ?? 0),
+    message: String(data?.statusMessage ?? data?.errorMessage ?? ''),
+  }
+}

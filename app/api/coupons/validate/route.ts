@@ -1,13 +1,14 @@
 import { formatPrice } from '@/lib/money'
 import { NextRequest, NextResponse } from 'next/server'
+import { hit } from '@/lib/rateLimitDb'
 import { supabaseAdmin } from '@/lib/supabase'
-import { rateLimit, getIP, limits } from '@/lib/rateLimit'
+import { getIP, limits } from '@/lib/rateLimit'
 import { getCurrentStore } from '@/lib/currentStore'
 
 export async function POST(req: NextRequest) {
   // Rate limit — max 10 attempts per minute per IP, prevents brute-forcing coupon codes
   const ip = getIP(req)
-  if (!rateLimit(ip, 'coupon', limits.coupon)) {
+  if (!(await hit(`coupon:${ip}`, limits.coupon.max, limits.coupon.windowMs / 1000))) {
     return NextResponse.json({ error: 'Too many attempts. Please wait a moment.' }, { status: 429 })
   }
 

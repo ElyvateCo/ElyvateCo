@@ -57,6 +57,7 @@ export type Product = {
   promo_video_enabled: boolean
   category: string
   stock_status: 'in_stock' | 'out_of_stock'
+  stock_quantity?: number | null   // null / missing = stock is not counted
   is_featured: boolean
   rating: number
   review_count: number

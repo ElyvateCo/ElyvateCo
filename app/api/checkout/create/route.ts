@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendAdminOrderNotification, sendCustomerConfirmation } from '@/lib/resend'
 import { getCurrentStore } from '@/lib/currentStore'
-import { rateLimit, getIP, limits } from '@/lib/rateLimit'
+import { getIP, limits } from '@/lib/rateLimit'
+import { hit } from '@/lib/rateLimitDb'
+import { releaseOrderResources, outOfStockProductId } from '@/lib/orderResources'
 import { normalizeBDPhone } from '@/lib/phone'
 import { getRequestOrigin } from '@/lib/requestOrigin'
 import { featureAllowed } from '@/lib/plans'
@@ -25,7 +27,8 @@ function sanitize(input: unknown): string {
 
 export async function POST(req: NextRequest) {
   const ip = getIP(req)
-  if (!rateLimit(ip, 'checkout', limits.checkout)) {
+  // Counted in Supabase, so the limit holds across all Vercel servers
+  if (!(await hit(`checkout:${ip}`, limits.checkout.max, limits.checkout.windowMs / 1000))) {
     return NextResponse.json(
       { error: 'Too many requests. Please wait a few minutes before trying again.' },
       { status: 429 }
@@ -35,6 +38,9 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { items, couponCode } = body
+    // Sent by the checkout page; the same key can never create two orders
+    const idemKey: string | null = typeof body.idempotencyKey === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(body.idempotencyKey)
+      ? body.idempotencyKey : null
     const paymentMethod = PAYMENT_METHODS.find(m => m === body.paymentMethod) as PaymentMethod | undefined
     if (!paymentMethod) {
       return NextResponse.json({ error: 'Please choose a payment method' }, { status: 400 })
@@ -143,7 +149,7 @@ export async function POST(req: NextRequest) {
 
     const { data: dbProducts, error: productsError } = await db
       .from('products')
-      .select('id, name, price, stock_status')
+      .select('id, name, price, stock_status, stock_quantity')
       .eq('store_id', store.id)
       .in('id', itemIds)
 
@@ -159,14 +165,15 @@ export async function POST(req: NextRequest) {
     // still cap it to something sane below).
     let subtotal = 0
     const lineItems: { name: string; quantity: number; price: number }[] = []
+    const wanted = new Map<string, number>() // product id -> total quantity in this cart
 
     for (const clientItem of items) {
       const dbProduct = productMap.get(clientItem.id)
       if (!dbProduct) {
         return NextResponse.json({ error: 'One or more items in your cart are no longer available' }, { status: 400 })
       }
-      if (dbProduct.stock_status === 'out_of_stock') {
-        return NextResponse.json({ error: `${dbProduct.name} is currently out of stock` }, { status: 400 })
+      if (dbProduct.stock_status === 'out_of_stock' || dbProduct.stock_quantity === 0) {
+        return NextResponse.json({ error: `${dbProduct.name} is currently out of stock` }, { status: 409 })
       }
 
       const quantity = Math.max(1, Math.min(50, parseInt(clientItem.quantity) || 1))
@@ -174,13 +181,22 @@ export async function POST(req: NextRequest) {
       subtotal += lineTotal
 
       lineItems.push({ name: dbProduct.name, quantity, price: dbProduct.price })
+      wanted.set(dbProduct.id, (wanted.get(dbProduct.id) ?? 0) + quantity)
+    }
+
+    // Quick friendly check; the real (atomic) stock check is reserve_stock below
+    for (const [pid, qty] of Array.from(wanted.entries())) {
+      const p = productMap.get(pid)!
+      if (p.stock_quantity !== null && p.stock_quantity !== undefined && qty > p.stock_quantity) {
+        return NextResponse.json({ error: `Only ${p.stock_quantity} of ${p.name} left in stock` }, { status: 409 })
+      }
     }
 
     subtotal = parseFloat(subtotal.toFixed(2))
 
-    // Validate + apply coupon server-side — never trust a client-sent discount amount
-    let discountAmount = 0
-    let appliedCouponCode: string | null = null
+    // Validate the coupon server-side — never trust a client-sent discount amount
+    type Coupon = { code: string; type: string; value: number }
+    let usableCoupon: Coupon | null = null
 
     if (couponCode && typeof couponCode === 'string') {
       const { data: coupon } = await db
@@ -197,12 +213,7 @@ export async function POST(req: NextRequest) {
         && (coupon.usage_limit === null || coupon.usage_count < coupon.usage_limit)
         && (!coupon.min_order || subtotal >= coupon.min_order)
 
-      if (isValid) {
-        discountAmount = coupon.type === 'percentage'
-          ? parseFloat(((subtotal * coupon.value) / 100).toFixed(2))
-          : Math.min(coupon.value, subtotal)
-        appliedCouponCode = coupon.code
-      }
+      if (isValid) usableCoupon = { code: coupon.code, type: coupon.type, value: Number(coupon.value) }
       // If invalid for any reason, silently ignore the coupon rather than
       // failing the whole checkout — the customer already saw it applied
       // (or not) at the cart step; this is just the final authoritative check.
@@ -215,21 +226,104 @@ export async function POST(req: NextRequest) {
       .select('id, name, charge, free_over')
       .eq('store_id', store.id)
       .eq('is_active', true)
-    let deliveryCharge = 0
-    let deliveryZoneName: string | null = null
-    if (zones && zones.length > 0) {
-      const zone = zones.find(z => z.id === body.deliveryZoneId)
-      if (!zone) {
-        return NextResponse.json({ error: 'Please choose your delivery area' }, { status: 400 })
-      }
-      const afterDiscount = subtotal - discountAmount
-      deliveryCharge = zone.free_over !== null && zone.free_over !== undefined && afterDiscount >= Number(zone.free_over)
-        ? 0
-        : Number(zone.charge)
-      deliveryZoneName = zone.name
+    const zone = zones && zones.length > 0 ? zones.find(z => z.id === body.deliveryZoneId) : null
+    if (zones && zones.length > 0 && !zone) {
+      return NextResponse.json({ error: 'Please choose your delivery area' }, { status: 400 })
     }
 
-    const finalTotal = parseFloat((subtotal - discountAmount + deliveryCharge).toFixed(2))
+    // Totals with or without a coupon (the coupon can still be refused below
+    // if its usage limit is hit by someone else at the same moment).
+    const priceWith = (c: Coupon | null) => {
+      const discountAmount = !c ? 0
+        : c.type === 'percentage'
+          ? parseFloat(((subtotal * c.value) / 100).toFixed(2))
+          : Math.min(c.value, subtotal)
+      const afterDiscount = subtotal - discountAmount
+      const deliveryCharge = !zone ? 0
+        : zone.free_over !== null && zone.free_over !== undefined && afterDiscount >= Number(zone.free_over)
+          ? 0 : Number(zone.charge)
+      return { discountAmount, deliveryCharge, finalTotal: parseFloat((subtotal - discountAmount + deliveryCharge).toFixed(2)) }
+    }
+    let totals = priceWith(usableCoupon)
+
+    // Builds the reply for an order (also used when the same checkout is
+    // submitted twice, so the second request gets the first order back).
+    const respond = (o: { id: string; total_price: number | string; payment_url?: string | null }) => {
+      const amount = Number(o.total_price)
+      const reference = o.id.slice(0, 8).toUpperCase()
+      if (paymentMethod === 'crypto_usdt' && cryptoConfig) {
+        return NextResponse.json({
+          orderId: o.id,
+          crypto: { currency: 'USDT', network: cryptoConfig.network, address: cryptoConfig.address, amount, reference },
+        })
+      }
+      if (autoProvider) {
+        return o.payment_url
+          ? NextResponse.json({ orderId: o.id, paymentUrl: o.payment_url })
+          : NextResponse.json({ error: 'Your payment is already being set up. Please wait a moment.' }, { status: 409 })
+      }
+      if (manualWallet) {
+        return NextResponse.json({
+          orderId: o.id,
+          manual: { provider: manualWallet.provider, number: manualWallet.number, accountType: manualWallet.accountType, amount, reference },
+        })
+      }
+      return NextResponse.json({ orderId: o.id, cod: true })
+    }
+    const findDuplicate = async () => {
+      if (!idemKey) return null
+      const { data: dup } = await db
+        .from('orders')
+        .select('id, total_price, payment_url, payment_method')
+        .eq('store_id', store.id)
+        .eq('idempotency_key', idemKey)
+        .neq('order_status', 'cancelled')
+        .maybeSingle()
+      return dup && dup.payment_method === paymentMethod ? dup : null
+    }
+
+    // Same checkout sent twice (double click, bad network retry)? Return the
+    // order that already exists instead of making another one.
+    const existing = await findDuplicate()
+    if (existing) return respond(existing)
+
+    // ── Take the stock (atomic, all-or-nothing) ──────────────────────────
+    const { data: reservedData, error: reserveError } = await db.rpc('reserve_stock', {
+      p_store_id: store.id,
+      p_items: Array.from(wanted.entries()).map(([product_id, qty]) => ({ product_id, qty })),
+    })
+    if (reserveError) {
+      const badId = outOfStockProductId(reserveError)
+      if (badId) {
+        const name = productMap.get(badId)?.name ?? 'An item'
+        return NextResponse.json({ error: `${name} just sold out or has less stock than you asked for` }, { status: 409 })
+      }
+      throw reserveError
+    }
+    const reserved = (reservedData ?? []) as { product_id: string; qty: number }[]
+
+    // ── Use the coupon (atomic: respects its usage limit) ────────────────
+    let claimedCoupon: string | null = null
+    if (usableCoupon) {
+      const { data: ok } = await db.rpc('claim_coupon', { p_store_id: store.id, p_code: usableCoupon.code })
+      if (ok === true) {
+        claimedCoupon = usableCoupon.code
+      } else {
+        usableCoupon = null            // limit reached a moment ago — continue without it
+        totals = priceWith(null)
+      }
+    }
+    const { discountAmount, deliveryCharge, finalTotal } = totals
+
+    // If anything below fails before the order exists, give these back
+    const undoReservation = async () => {
+      try {
+        if (reserved.length > 0) await db.rpc('restore_stock', { p_store_id: store.id, p_items: reserved })
+        if (claimedCoupon) await db.rpc('release_coupon', { p_store_id: store.id, p_code: claimedCoupon })
+      } catch (undoErr) {
+        console.error('Could not undo stock/coupon reservation:', undoErr)
+      }
+    }
 
     const productName = lineItems.map(i => `${i.name} × ${i.quantity}`).join(', ')
     const totalQuantity = lineItems.reduce((s, i) => s + i.quantity, 0)
@@ -254,19 +348,29 @@ export async function POST(req: NextRequest) {
         crypto_amount:    paymentMethod === 'crypto_usdt' ? finalTotal : null,
         crypto_network:   cryptoConfig?.network ?? null,
         order_status:     'processing',
-        coupon_code:      appliedCouponCode,
+        coupon_code:      claimedCoupon,
         discount_amount:  discountAmount,
         delivery_charge:  deliveryCharge,
-        delivery_zone:    deliveryZoneName,
+        delivery_zone:    zone?.name ?? null,
+        idempotency_key:  idemKey,
+        stock_items:      reserved,
       })
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      await undoReservation()
+      // Lost a race with an identical request that just created the order
+      if (error.code === '23505') {
+        const winner = await findDuplicate()
+        if (winner) return respond(winner)
+      }
+      throw error
+    }
 
     // Automatic bKash / Nagad: ask the gateway for a payment link BEFORE
-    // anything else is counted. If it fails the order is cancelled, so the
-    // customer can simply try another method.
+    // anything else is counted. If it fails the order is cancelled (and its
+    // stock + coupon given back), so the customer can try another method.
     let autoPaymentUrl: string | null = null
     if (autoProvider) {
       try {
@@ -281,7 +385,7 @@ export async function POST(req: NextRequest) {
             callbackURL,
             payerReference: form.phone,
           })
-          await db.from('orders').update({ gateway_payment_id: pay.paymentID }).eq('id', order.id)
+          await db.from('orders').update({ gateway_payment_id: pay.paymentID, payment_url: pay.bkashURL }).eq('id', order.id)
           autoPaymentUrl = pay.bkashURL
         } else {
           const loaded = await loadGatewayCreds<NagadCreds>(store.id, 'nagad')
@@ -292,33 +396,17 @@ export async function POST(req: NextRequest) {
             callbackURL,
             ip: getIP(req),
           })
-          await db.from('orders').update({ gateway_payment_id: pay.paymentRefId }).eq('id', order.id)
+          await db.from('orders').update({ gateway_payment_id: pay.paymentRefId, payment_url: pay.redirectUrl }).eq('id', order.id)
           autoPaymentUrl = pay.redirectUrl
         }
       } catch (gatewayErr) {
         console.error('Gateway start failed:', gatewayErr)
         await db.from('orders').update({ payment_status: 'failed', order_status: 'cancelled' }).eq('id', order.id)
+        await releaseOrderResources(order.id)
         return NextResponse.json(
           { error: 'We could not start the online payment. Please try another payment method.' },
           { status: 502 }
         )
-      }
-    }
-
-    if (appliedCouponCode) {
-      const { data: coupon } = await db
-        .from('coupons')
-        .select('usage_count')
-        .eq('store_id', store.id)
-        .eq('code', appliedCouponCode)
-        .single()
-
-      if (coupon) {
-        await db
-          .from('coupons')
-          .update({ usage_count: coupon.usage_count + 1 })
-          .eq('store_id', store.id)
-          .eq('code', appliedCouponCode)
       }
     }
 
@@ -334,43 +422,10 @@ export async function POST(req: NextRequest) {
       console.error('Order created but email failed to send:', emailErr)
     }
 
-    if (paymentMethod === 'crypto_usdt' && cryptoConfig) {
-      return NextResponse.json({
-        orderId: order.id,
-        crypto: {
-          currency: 'USDT',
-          network:  cryptoConfig.network,
-          address:  cryptoConfig.address,
-          amount:   finalTotal,
-          reference: order.id.slice(0, 8).toUpperCase(),
-        },
-      })
-    }
-
-    if (autoPaymentUrl) {
-      return NextResponse.json({ orderId: order.id, paymentUrl: autoPaymentUrl })
-    }
-
-    if (manualWallet) {
-      return NextResponse.json({
-        orderId: order.id,
-        manual: {
-          provider:    manualWallet.provider,
-          number:      manualWallet.number,
-          accountType: manualWallet.accountType,
-          amount:      finalTotal,
-          reference:   order.id.slice(0, 8).toUpperCase(),
-        },
-      })
-    }
-
-    // Cash on delivery — nothing more to do online
-    return NextResponse.json({ orderId: order.id, cod: true })
+    return respond({ id: order.id, total_price: finalTotal, payment_url: autoPaymentUrl })
   } catch (err: unknown) {
+    // Details stay in the server log — never send database error text to a customer
     console.error('Checkout error:', err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to create order' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create order. Please try again.' }, { status: 500 })
   }
 }

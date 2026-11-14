@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { hit } from '@/lib/rateLimitDb'
 import { supabaseAdmin } from '@/lib/supabase'
-import { rateLimit, getIP, limits } from '@/lib/rateLimit'
+import { getIP, limits } from '@/lib/rateLimit'
 import { getCurrentStore } from '@/lib/currentStore'
 import { normalizeBDPhone } from '@/lib/phone'
 
 export async function GET(req: NextRequest) {
   // Rate limit — prevents brute-forcing order IDs to find other customers' data
   const ip = getIP(req)
-  if (!rateLimit(ip, 'track-order', limits.general)) {
+  if (!(await hit(`track-order:${ip}`, limits.general.max, limits.general.windowMs / 1000))) {
     return NextResponse.json({ error: 'Too many requests. Please wait a moment.' }, { status: 429 })
   }
 

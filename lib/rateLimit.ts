@@ -54,8 +54,10 @@ export const limits = {
   adminLogin: { windowMs: 15 * 60 * 1000, max: 5 },
   // Coupon validation — max 10 per minute per IP
   coupon: { windowMs: 60 * 1000, max: 10 },
-  // Checkout — max 5 orders per 10 minutes per IP (prevents spam orders)
-  checkout: { windowMs: 10 * 60 * 1000, max: 5 },
+  // Checkout — max 20 per 10 minutes per IP. Many Bangladeshi mobile customers
+  // share one carrier IP, and this limit is now counted in the database (it
+  // really holds), so 5 would block real customers during a busy sale.
+  checkout: { windowMs: 10 * 60 * 1000, max: 20 },
   // Reviews — max 3 submissions per hour per IP
   review: { windowMs: 60 * 60 * 1000, max: 3 },
   // Contact form — max 3 per hour per IP

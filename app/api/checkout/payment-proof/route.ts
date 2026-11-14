@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { hit } from '@/lib/rateLimitDb'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getCurrentStore } from '@/lib/currentStore'
-import { rateLimit, getIP, limits } from '@/lib/rateLimit'
+import { getIP, limits } from '@/lib/rateLimit'
 import { normalizeBDPhone } from '@/lib/phone'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -11,7 +12,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // bKash/Nagad statement and marks the order Paid in the admin panel.
 export async function POST(req: NextRequest) {
   const ip = getIP(req)
-  if (!rateLimit(ip, 'checkout', limits.checkout)) {
+  if (!(await hit(`payment-proof:${ip}`, limits.checkout.max, limits.checkout.windowMs / 1000))) {
     return NextResponse.json({ error: 'Too many requests. Please wait a few minutes.' }, { status: 429 })
   }
 

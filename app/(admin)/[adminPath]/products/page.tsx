@@ -23,6 +23,8 @@ export default function AdminProducts() {
   const [videoLinks, setVideoLinks] = useState('')
   const [newBullet, setNewBullet] = useState('')
   const bulletRef  = useRef<HTMLInputElement>(null)
+  // The stock count changes whenever customers buy, so it is only sent when the merchant actually edits it here
+  const [stockTouched, setStockTouched] = useState(false)
 
   const load = async () => {
     const res = await fetch('/api/admin/products')
@@ -38,8 +40,8 @@ export default function AdminProducts() {
 
   useEffect(() => { load(); loadCategories() }, [])
 
-  function openNew() { setEditing(EMPTY); setNewBullet(''); setModal(true) }
-  function openEdit(p: Product) { setEditing({ ...p, bullet_points: p.bullet_points ?? [], product_videos: p.product_videos ?? [], promo_video_url: p.promo_video_url ?? null, promo_video_enabled: p.promo_video_enabled ?? false }); setNewBullet(''); setModal(true) }
+  function openNew() { setStockTouched(false); setEditing(EMPTY); setNewBullet(''); setModal(true) }
+  function openEdit(p: Product) { setStockTouched(false); setEditing({ ...p, bullet_points: p.bullet_points ?? [], product_videos: p.product_videos ?? [], promo_video_url: p.promo_video_url ?? null, promo_video_enabled: p.promo_video_enabled ?? false }); setNewBullet(''); setModal(true) }
 
   // ── Bullet helpers ────────────────────────────────────────────
   function addBullet() {
@@ -108,7 +110,7 @@ export default function AdminProducts() {
       const res = await fetch('/api/admin/products', {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...editing, bullet_points: editing.bullet_points ?? [], product_videos: editing.product_videos ?? [], promo_video_url: editing.promo_video_url ?? null, promo_video_enabled: editing.promo_video_enabled ?? false }),
+        body: JSON.stringify({ ...editing, stock_changed: stockTouched, bullet_points: editing.bullet_points ?? [], product_videos: editing.product_videos ?? [], promo_video_url: editing.promo_video_url ?? null, promo_video_enabled: editing.promo_video_enabled ?? false }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
@@ -185,7 +187,9 @@ export default function AdminProducts() {
                     <td className="px-5 py-3 text-ink-secondary capitalize">{p.category || '—'}</td>
                     <td className="px-5 py-3">
                       <span className={`px-2.5 py-1 rounded-xl text-xs font-medium ${p.stock_status === 'in_stock' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {p.stock_status === 'in_stock' ? 'In Stock' : 'Out of Stock'}
+                        {p.stock_status === 'in_stock'
+                          ? (typeof p.stock_quantity === 'number' ? `In Stock (${p.stock_quantity})` : 'In Stock')
+                          : 'Out of Stock'}
                       </span>
                     </td>
                     <td className="px-5 py-3">
@@ -336,16 +340,33 @@ export default function AdminProducts() {
                   )}
                 </div>
                 <div>
-                  <label className="label">Stock Status</label>
-                  <select
-                    className="input"
-                    value={editing.stock_status ?? 'in_stock'}
-                    onChange={e => setEditing(p => ({ ...p, stock_status: e.target.value as Product['stock_status'] }))}
-                  >
-                    <option value="in_stock">In Stock</option>
-                    <option value="out_of_stock">Out of Stock</option>
-                  </select>
+                  <label className="label">Stock quantity</label>
+                  <input
+                    type="number" className="input" min="0" step="1"
+                    placeholder="Leave empty if you don't count stock"
+                    value={editing.stock_quantity ?? ''}
+                    onChange={e => {
+                      setStockTouched(true)
+                      setEditing(p => ({ ...p, stock_quantity: e.target.value === '' ? null : Math.max(0, Math.floor(Number(e.target.value))) }))
+                    }}
+                  />
+                  <p className="text-xs text-ink-muted mt-1.5">
+                    With a number, stock goes down on every order and the product shows Out of Stock at 0.
+                  </p>
                 </div>
+                {(editing.stock_quantity === null || editing.stock_quantity === undefined) && (
+                  <div>
+                    <label className="label">Stock Status</label>
+                    <select
+                      className="input"
+                      value={editing.stock_status ?? 'in_stock'}
+                      onChange={e => { setStockTouched(true); setEditing(p => ({ ...p, stock_status: e.target.value as Product['stock_status'] })) }}
+                    >
+                      <option value="in_stock">In Stock</option>
+                      <option value="out_of_stock">Out of Stock</option>
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="label">Rating (0–5)</label>
                   <input

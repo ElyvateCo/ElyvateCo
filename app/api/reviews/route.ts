@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { hit } from '@/lib/rateLimitDb'
 import { supabaseAdmin } from '@/lib/supabase'
-import { rateLimit, getIP, limits } from '@/lib/rateLimit'
+import { getIP, limits } from '@/lib/rateLimit'
 import { getCurrentStore } from '@/lib/currentStore'
 
 // Strips HTML/script content — critical since review text is rendered
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   // Rate limit — max 3 reviews per hour per IP, prevents review spam/flooding
   const ip = getIP(req)
-  if (!rateLimit(ip, 'review', limits.review)) {
+  if (!(await hit(`review:${ip}`, limits.review.max, limits.review.windowMs / 1000))) {
     return NextResponse.json({ error: 'Too many review submissions. Please try again later.' }, { status: 429 })
   }
 

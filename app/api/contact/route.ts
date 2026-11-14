@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { hit } from '@/lib/rateLimitDb'
 import { Resend } from 'resend'
-import { rateLimit, getIP, limits } from '@/lib/rateLimit'
+import { getIP, limits } from '@/lib/rateLimit'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getBrandColor, getStoreEmailContext } from '@/lib/resend'
 import { getCurrentStore } from '@/lib/currentStore'
@@ -17,7 +18,7 @@ function sanitize(input: unknown, maxLen: number): string {
 
 export async function POST(req: NextRequest) {
   const ip = getIP(req)
-  if (!rateLimit(ip, 'contact', limits.contact)) {
+  if (!(await hit(`contact:${ip}`, limits.contact.max, limits.contact.windowMs / 1000))) {
     return NextResponse.json({ error: 'Too many messages sent. Please try again later.' }, { status: 429 })
   }
 
